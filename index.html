@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Safety Path – Sign In</title>
+  <link rel="stylesheet" href="css/styles.css"/>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="card fade-in">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="brand-icon">🛡️</div>
+      <div class="brand-name">SAFETY<span>PATH</span></div>
+    </div>
+
+    <!-- STEP: Phone Input -->
+    <div id="step-phone">
+      <h1 class="page-title">Welcome back</h1>
+      <p class="page-subtitle">Sign in to access your safe navigation dashboard.</p>
+
+      <!-- Google -->
+      <button class="btn btn-google" onclick="handleGoogleSignIn()">
+        <img src="https://www.google.com/favicon.ico" width="16" height="16" style="border-radius:2px"/>
+        Continue with Google
+      </button>
+
+      <div class="divider">or use phone number</div>
+
+      <div id="alert-box"></div>
+
+      <div class="form-group">
+        <label>Mobile Number <span class="req">*</span></label>
+        <div class="phone-row">
+          <div class="input-wrap" style="width:90px">
+            <input class="country-code" value="+91" readonly style="padding-left:0.9rem; color:var(--teal); font-weight:600; text-align:center;"/>
+          </div>
+          <div class="input-wrap" style="flex:1">
+            <span class="icon">📱</span>
+            <input class="phone-num" type="tel" id="phone-input"
+              placeholder="9876543210" maxlength="10"
+              oninput="this.value=this.value.replace(/\D/g,'')"/>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="btn-send-otp" onclick="handleSendOTP()">
+        Send OTP →
+      </button>
+
+      <div class="footer-link">
+        New here? <a href="register.html">Create an account</a>
+      </div>
+    </div>
+
+    <!-- STEP: OTP Verification -->
+    <div id="step-otp" style="display:none;">
+      <button onclick="goBack('step-phone','step-otp')"
+        style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.3rem;">
+        ← Back
+      </button>
+
+      <h1 class="page-title">Verify OTP</h1>
+      <p class="page-subtitle" id="otp-hint">Enter the 6-digit code sent to your number.</p>
+
+      <div id="alert-box-otp"></div>
+
+      <div class="otp-row">
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,0)" />
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,1)" />
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,2)" />
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,3)" />
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,4)" />
+        <input type="text" maxlength="1" class="otp-digit" oninput="otpNext(this,5)" />
+      </div>
+
+      <button class="btn btn-primary" onclick="handleVerifyOTP()">Verify & Sign In</button>
+
+      <div class="footer-link" style="margin-top:1rem;">
+        Didn't receive it? <a href="#" onclick="handleSendOTP(); return false;">Resend OTP</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  // ── OTP Input navigation ──────────────────────────────────
+  function otpNext(input, idx) {
+    input.value = input.value.replace(/\D/g, '');
+    const digits = document.querySelectorAll('.otp-digit');
+    if (input.value && idx < 5) digits[idx + 1].focus();
+    if (idx === 5 && input.value) handleVerifyOTP();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace') {
+      const digits = document.querySelectorAll('.otp-digit');
+      digits.forEach((d, i) => {
+        if (document.activeElement === d && !d.value && i > 0) {
+          digits[i-1].focus();
+        }
+      });
+    }
+  });
+
+  // ── Helpers ───────────────────────────────────────────────
+  function showAlert(boxId, msg, type='error') {
+    const icons = { error:'⚠️', success:'✅', info:'ℹ️' };
+    document.getElementById(boxId).innerHTML =
+      `<div class="alert alert-${type}">${icons[type]} ${msg}</div>`;
+  }
+  function clearAlert(boxId) {
+    document.getElementById(boxId).innerHTML = '';
+  }
+  function setLoading(btnId, loading, text='Send OTP →') {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.textContent = loading ? 'Please wait…' : text;
+  }
+  function goBack(showId, hideId) {
+    document.getElementById(hideId).style.display = 'none';
+    document.getElementById(showId).style.display = 'block';
+  }
+
+  // ── Phone OTP flow ────────────────────────────────────────
+  async function handleSendOTP() {
+    clearAlert('alert-box');
+    const num = document.getElementById('phone-input').value.trim();
+    if (num.length !== 10) {
+      showAlert('alert-box', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setLoading('btn-send-otp', true);
+    const result = await sendOTP('+91' + num);
+    setLoading('btn-send-otp', false, 'Send OTP →');
+    if (result.success) {
+      document.getElementById('otp-hint').textContent =
+        `Enter the 6-digit code sent to +91 ${num}`;
+      document.getElementById('step-phone').style.display = 'none';
+      document.getElementById('step-otp').style.display = 'block';
+      document.querySelectorAll('.otp-digit')[0].focus();
+    } else {
+      showAlert('alert-box', result.error || 'Failed to send OTP. Try again.');
+    }
+  }
+
+  async function handleVerifyOTP() {
+    clearAlert('alert-box-otp');
+    const otp = [...document.querySelectorAll('.otp-digit')]
+      .map(d => d.value).join('');
+    if (otp.length !== 6) {
+      showAlert('alert-box-otp', 'Please enter all 6 digits.');
+      return;
+    }
+    showAlert('alert-box-otp', 'Verifying…', 'info');
+    const result = await verifyOTP(otp);
+    if (result.success) {
+      const exists = await checkUserExists(result.user.uid);
+      if (!exists) {
+        // New user — go to registration, pass uid via sessionStorage
+        sessionStorage.setItem('pendingUid', result.user.uid);
+        sessionStorage.setItem('pendingPhone', result.user.phoneNumber);
+        sessionStorage.setItem('authMethod', 'phone');
+        window.location.href = 'register.html';
+      } else {
+        await updateLastLogin(result.user.uid);
+        window.location.href = 'dashboard.html';
+      }
+    } else {
+      showAlert('alert-box-otp', result.error);
+    }
+  }
+
+  // ── Google Sign-In ────────────────────────────────────────
+  async function handleGoogleSignIn() {
+    clearAlert('alert-box');
+    showAlert('alert-box', 'Opening Google Sign-In…', 'info');
+    const result = await signInWithGoogle();
+    if (result.success) {
+      if (result.isNew || !(await checkUserExists(result.user.uid))) {
+        sessionStorage.setItem('pendingUid', result.user.uid);
+        sessionStorage.setItem('pendingEmail', result.user.email);
+        sessionStorage.setItem('pendingName', result.user.displayName || '');
+        sessionStorage.setItem('authMethod', 'google');
+        window.location.href = 'register.html';
+      } else {
+        await updateLastLogin(result.user.uid);
+        window.location.href = 'dashboard.html';
+      }
+    } else {
+      showAlert('alert-box', result.error || 'Google Sign-In failed.');
+    }
+  }
+
+  // ── Auth guard: redirect if already logged in ──────────────
+  onAuthStateChanged(async (user) => {
+    if (user) {
+      const exists = await checkUserExists(user.uid);
+      if (exists) window.location.href = 'dashboard.html';
+    }
+  });
+</script>
+</body>
+</html>

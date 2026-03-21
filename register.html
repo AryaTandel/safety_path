@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Safety Path – Create Account</title>
+  <link rel="stylesheet" href="css/styles.css"/>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="page-wrap">
+<div class="card fade-in" style="max-width:520px;">
+
+  <!-- Brand -->
+  <div class="brand">
+    <div class="brand-icon">🛡️</div>
+    <div class="brand-name">SAFETY<span>PATH</span></div>
+  </div>
+
+  <!-- Steps Bar -->
+  <div class="steps" id="steps-bar">
+    <div class="step active" id="step-ind-1">
+      <div class="step-dot">1</div>
+      <div class="step-label">Identity</div>
+    </div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step active" id="step-ind-2" style="opacity:0.4">
+      <div class="step-dot">2</div>
+      <div class="step-label">Personal</div>
+    </div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step" id="step-ind-3" style="opacity:0.4">
+      <div class="step-dot">3</div>
+      <div class="step-label">Emergency</div>
+    </div>
+    <div class="step-line" id="line-3"></div>
+    <div class="step" id="step-ind-4" style="opacity:0.4">
+      <div class="step-dot">4</div>
+      <div class="step-label">Privacy</div>
+    </div>
+  </div>
+
+  <div id="alert-global"></div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 1 – Identity / Auth
+  ══════════════════════════════════════════ -->
+  <div id="s1">
+    <h1 class="page-title">Create your account</h1>
+    <p class="page-subtitle">How would you like to sign up?</p>
+
+    <button class="btn btn-google" onclick="handleGoogleReg()">
+      <img src="https://www.google.com/favicon.ico" width="16" height="16" style="border-radius:2px"/>
+      Continue with Google
+    </button>
+
+    <div class="divider">or use phone number</div>
+
+    <div class="form-group">
+      <label>Mobile Number <span class="req">*</span></label>
+      <div class="phone-row">
+        <input class="country-code" value="+91" readonly
+          style="width:72px;padding-left:0.7rem;color:var(--teal);font-weight:600;text-align:center;border-radius:10px;flex-shrink:0;"/>
+        <div class="input-wrap" style="flex:1">
+          <span class="icon">📱</span>
+          <input class="phone-num" type="tel" id="reg-phone"
+            placeholder="9876543210" maxlength="10"
+            oninput="this.value=this.value.replace(/\D/g,'')"/>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-reg-otp" onclick="handleRegSendOTP()">
+      Send OTP to verify →
+    </button>
+
+    <!-- OTP section (hidden until OTP sent) -->
+    <div id="otp-section" style="display:none; margin-top:1.25rem;">
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem;" id="otp-msg">
+        Enter the 6-digit OTP sent to your number
+      </p>
+      <div class="otp-row">
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,0)"/>
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,1)"/>
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,2)"/>
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,3)"/>
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,4)"/>
+        <input type="text" maxlength="1" class="rotp" oninput="rotpNext(this,5)"/>
+      </div>
+      <button class="btn btn-primary" onclick="handleRegVerifyOTP()">Verify Phone →</button>
+    </div>
+
+    <div class="footer-link">Already have an account? <a href="index.html">Sign in</a></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 2 – Personal Details
+  ══════════════════════════════════════════ -->
+  <div id="s2" style="display:none;">
+    <h1 class="page-title">Tell us about you</h1>
+    <p class="page-subtitle">This helps us personalise safety recommendations for you.</p>
+
+    <div class="form-group">
+      <label>Full Name <span class="req">*</span></label>
+      <div class="input-wrap">
+        <span class="icon">👤</span>
+        <input type="text" id="reg-name" placeholder="e.g. Priya Sharma"/>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="form-group">
+        <label>Age <span class="req">*</span></label>
+        <div class="input-wrap">
+          <span class="icon">🎂</span>
+          <input type="number" id="reg-age" placeholder="e.g. 22" min="10" max="100"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Gender <span class="req">*</span></label>
+        <div class="input-wrap">
+          <span class="icon">⚧</span>
+          <select id="reg-gender">
+            <option value="" disabled selected>Select</option>
+            <option>Female</option>
+            <option>Male</option>
+            <option>Non-binary</option>
+            <option>Prefer not to say</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Occupation <span class="req">*</span></label>
+      <div class="input-wrap">
+        <span class="icon">💼</span>
+        <select id="reg-occupation">
+          <option value="" disabled selected>Select your occupation</option>
+          <option>Student</option>
+          <option>Working Professional</option>
+          <option>Night Shift Worker</option>
+          <option>Homemaker</option>
+          <option>Freelancer</option>
+          <option>Healthcare Worker</option>
+          <option>Other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Email Address <span style="color:var(--muted);font-size:0.7rem;">(optional)</span></label>
+      <div class="input-wrap">
+        <span class="icon">✉️</span>
+        <input type="email" id="reg-email" placeholder="you@example.com"/>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;margin-top:0.5rem;">
+      <button class="btn btn-ghost" onclick="goToStep(1)" style="width:auto;padding:0.75rem 1.2rem;">← Back</button>
+      <button class="btn btn-primary" onclick="validateStep2()">Next →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 3 – Emergency Contact
+  ══════════════════════════════════════════ -->
+  <div id="s3" style="display:none;">
+    <h1 class="page-title">Emergency contact</h1>
+    <p class="page-subtitle">
+      We'll alert this person if you trigger an SOS during travel.
+      <span style="color:var(--amber)">⚠️ This is important for your safety.</span>
+    </p>
+
+    <div class="form-group">
+      <label>Contact Name <span class="req">*</span></label>
+      <div class="input-wrap">
+        <span class="icon">👥</span>
+        <input type="text" id="reg-ec-name" placeholder="e.g. Maa, Rohan Bhai"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Contact Phone Number <span class="req">*</span></label>
+      <div class="phone-row">
+        <input value="+91" readonly
+          style="width:72px;padding-left:0.7rem;color:var(--teal);font-weight:600;text-align:center;border-radius:10px;flex-shrink:0;background:rgba(255,255,255,0.04);border:1px solid var(--navy-border);"/>
+        <div class="input-wrap" style="flex:1">
+          <span class="icon">📞</span>
+          <input type="tel" id="reg-ec-phone" placeholder="9876543210" maxlength="10"
+            oninput="this.value=this.value.replace(/\D/g,'')"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:0.5rem;">
+      ℹ️ Your emergency contact will receive an SMS + location link if you mark yourself unsafe.
+    </div>
+
+    <div style="display:flex;gap:0.75rem;margin-top:1rem;">
+      <button class="btn btn-ghost" onclick="goToStep(2)" style="width:auto;padding:0.75rem 1.2rem;">← Back</button>
+      <button class="btn btn-primary" onclick="validateStep3()">Next →</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 4 – Privacy Settings
+  ══════════════════════════════════════════ -->
+  <div id="s4" style="display:none;">
+    <h1 class="page-title">Your privacy</h1>
+    <p class="page-subtitle">Safety Path is designed to be privacy-first. Choose what's right for you.</p>
+
+    <div class="toggle-row" style="margin-bottom:0.75rem;">
+      <div class="toggle-info">
+        <p>🔒 Privacy Mode</p>
+        <small>Hides your travel history and disables route logging. Your trips won't be stored.</small>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="pref-privacy"/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row" style="margin-bottom:0.75rem;">
+      <div class="toggle-info">
+        <p>📊 Help Improve Safety Data</p>
+        <small>Anonymously contribute your route ratings to improve safety scores for everyone in Mumbai.</small>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="pref-contribute" checked/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row" style="margin-bottom:1.5rem;">
+      <div class="toggle-info">
+        <p>🔔 Safety Check-In Alerts</p>
+        <small>Enable periodic voice check-ins during late-night or high-risk travel.</small>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="pref-checkin" checked/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div style="display:flex;gap:0.75rem;">
+      <button class="btn btn-ghost" onclick="goToStep(3)" style="width:auto;padding:0.75rem 1.2rem;">← Back</button>
+      <button class="btn btn-primary" id="btn-complete" onclick="completeRegistration()">
+        Complete Registration ✓
+      </button>
+    </div>
+
+    <p style="color:var(--muted);font-size:0.75rem;margin-top:1rem;text-align:center;">
+      By registering, you agree that your data is used solely for safety navigation purposes and will not be sold or shared with advertisers.
+    </p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       STEP 5 – Success
+  ══════════════════════════════════════════ -->
+  <div id="s5" style="display:none;">
+    <div class="success-wrap">
+      <div class="success-icon">🛡️</div>
+      <h2 class="success-name">Welcome, <span id="suc-name">there</span>!</h2>
+      <p style="color:var(--muted);margin-bottom:0.5rem;font-size:0.9rem;">
+        Your Safety Path account has been created successfully.
+      </p>
+      <div id="suc-sms-note" class="alert alert-success" style="margin:1.25rem 0;text-align:left;">
+        ✅ A confirmation SMS has been sent to your registered mobile number.
+      </div>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--navy-border);border-radius:12px;padding:1rem;margin-bottom:1.5rem;text-align:left;">
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.06em;">Your Profile</p>
+        <div id="suc-details" style="font-size:0.9rem;display:grid;gap:0.4rem;"></div>
+      </div>
+      <button class="btn btn-primary" onclick="window.location.href='dashboard.html'">
+        Go to Safety Map →
+      </button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="js/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+
+// ── State ─────────────────────────────────────────────────────
+const state = {
+  step: 1,
+  uid: sessionStorage.getItem('pendingUid') || null,
+  phone: sessionStorage.getItem('pendingPhone') || null,
+  email: sessionStorage.getItem('pendingEmail') || null,
+  name: sessionStorage.getItem('pendingName') || null,
+  authMethod: sessionStorage.getItem('authMethod') || 'phone',
+  phoneVerified: !!sessionStorage.getItem('pendingPhone')
+};
+
+// If user came via Google (uid already set), skip OTP step
+window.addEventListener('DOMContentLoaded', () => {
+  if (state.uid && state.authMethod === 'google') {
+    if (state.name) document.getElementById('reg-name').value = state.name;
+    if (state.email) document.getElementById('reg-email').value = state.email;
+    goToStep(2);
+  }
+  // If user arrived via phone verification from index.html
+  if (state.uid && state.authMethod === 'phone' && state.phone) {
+    document.getElementById('reg-phone').value = state.phone.replace('+91','');
+    document.getElementById('reg-phone').readOnly = true;
+    goToStep(2);
+  }
+});
+
+// ── Step navigation ───────────────────────────────────────────
+function goToStep(n) {
+  for (let i = 1; i <= 5; i++) {
+    document.getElementById(`s${i}`).style.display = i === n ? 'block' : 'none';
+  }
+  // Update step indicators
+  const inds = [1,2,3,4];
+  inds.forEach(i => {
+    const el = document.getElementById(`step-ind-${i}`);
+    if (!el) return;
+    el.style.opacity = '1';
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+    else el.style.opacity = '0.4';
+    // mark step dot as check if done
+    const dot = el.querySelector('.step-dot');
+    if (i < n) dot.textContent = '✓';
+    else dot.textContent = i;
+  });
+  for (let i = 1; i <= 3; i++) {
+    const line = document.getElementById(`line-${i}`);
+    if (line) line.classList.toggle('done', n > i);
+  }
+  if (n === 5) document.getElementById('steps-bar').style.display = 'none';
+  state.step = n;
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function showGlobal(msg, type='error') {
+  document.getElementById('alert-global').innerHTML =
+    `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(() => document.getElementById('alert-global').innerHTML = '', 4000);
+}
+
+// ── Step 1: Phone OTP ─────────────────────────────────────────
+function rotpNext(input, idx) {
+  input.value = input.value.replace(/\D/g,'');
+  const digits = document.querySelectorAll('.rotp');
+  if (input.value && idx < 5) digits[idx+1].focus();
+}
+
+async function handleRegSendOTP() {
+  const num = document.getElementById('reg-phone').value.trim();
+  if (num.length !== 10) { showGlobal('Enter a valid 10-digit number.'); return; }
+  document.getElementById('btn-reg-otp').disabled = true;
+  document.getElementById('btn-reg-otp').textContent = 'Sending…';
+  const result = await sendOTP('+91' + num);
+  document.getElementById('btn-reg-otp').disabled = false;
+  document.getElementById('btn-reg-otp').textContent = 'Send OTP to verify →';
+  if (result.success) {
+    document.getElementById('otp-msg').textContent =
+      `OTP sent to +91 ${num}. Enter below:`;
+    document.getElementById('otp-section').style.display = 'block';
+    document.querySelectorAll('.rotp')[0].focus();
+  } else {
+    showGlobal(result.error || 'Failed to send OTP.');
+  }
+}
+
+async function handleRegVerifyOTP() {
+  const otp = [...document.querySelectorAll('.rotp')].map(d => d.value).join('');
+  if (otp.length !== 6) { showGlobal('Enter all 6 digits.'); return; }
+  showGlobal('Verifying…', 'info');
+  const result = await verifyOTP(otp);
+  if (result.success) {
+    state.uid = result.user.uid;
+    state.phone = result.user.phoneNumber;
+    state.authMethod = 'phone';
+    goToStep(2);
+    document.getElementById('alert-global').innerHTML = '';
+  } else {
+    showGlobal(result.error || 'Invalid OTP.');
+  }
+}
+
+async function handleGoogleReg() {
+  showGlobal('Opening Google Sign-In…', 'info');
+  const result = await signInWithGoogle();
+  if (result.success) {
+    state.uid = result.user.uid;
+    state.email = result.user.email;
+    state.name = result.user.displayName || '';
+    state.authMethod = 'google';
+    if (state.name) document.getElementById('reg-name').value = state.name;
+    if (state.email) document.getElementById('reg-email').value = state.email;
+    goToStep(2);
+    document.getElementById('alert-global').innerHTML = '';
+  } else {
+    showGlobal(result.error || 'Google Sign-In failed.');
+  }
+}
+
+// ── Step 2: Personal Details ───────────────────────────────────
+function validateStep2() {
+  const name = document.getElementById('reg-name').value.trim();
+  const age  = document.getElementById('reg-age').value.trim();
+  const gender = document.getElementById('reg-gender').value;
+  const occ  = document.getElementById('reg-occupation').value;
+  if (!name) { showGlobal('Please enter your full name.'); return; }
+  if (!age || age < 10 || age > 100) { showGlobal('Please enter a valid age.'); return; }
+  if (!gender) { showGlobal('Please select your gender.'); return; }
+  if (!occ) { showGlobal('Please select your occupation.'); return; }
+  goToStep(3);
+}
+
+// ── Step 3: Emergency Contact ──────────────────────────────────
+function validateStep3() {
+  const ecName = document.getElementById('reg-ec-name').value.trim();
+  const ecPhone = document.getElementById('reg-ec-phone').value.trim();
+  if (!ecName) { showGlobal('Please enter emergency contact name.'); return; }
+  if (ecPhone.length !== 10) { showGlobal('Please enter a valid emergency contact number.'); return; }
+  goToStep(4);
+}
+
+// ── Step 4: Complete Registration ─────────────────────────────
+async function completeRegistration() {
+  if (!state.uid) { showGlobal('Session expired. Please start over.'); return; }
+
+  const btn = document.getElementById('btn-complete');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const formData = {
+    name: document.getElementById('reg-name').value.trim(),
+    age: document.getElementById('reg-age').value,
+    gender: document.getElementById('reg-gender').value,
+    occupation: document.getElementById('reg-occupation').value,
+    email: document.getElementById('reg-email').value.trim(),
+    phone: state.phone || '',
+    emergencyContact: document.getElementById('reg-ec-name').value.trim(),
+    emergencyPhone: '+91' + document.getElementById('reg-ec-phone').value.trim(),
+    authMethod: state.authMethod,
+    privacyMode: document.getElementById('pref-privacy').checked,
+    contributeData: document.getElementById('pref-contribute').checked,
+    checkinAlerts: document.getElementById('pref-checkin').checked
+  };
+
+  const result = await saveUserProfile(state.uid, formData);
+
+  if (result.success) {
+    // Clear session storage
+    ['pendingUid','pendingPhone','pendingEmail','pendingName','authMethod']
+      .forEach(k => sessionStorage.removeItem(k));
+
+    // Populate success screen
+    document.getElementById('suc-name').textContent = formData.name.split(' ')[0];
+    document.getElementById('suc-details').innerHTML = `
+      <div>👤 <b>${formData.name}</b> · ${formData.age} yrs · ${formData.gender}</div>
+      <div>💼 ${formData.occupation}</div>
+      <div>📱 ${formData.phone || '—'}</div>
+      <div>🆘 Emergency: ${formData.emergencyContact} (${formData.emergencyPhone})</div>
+    `;
+    goToStep(5);
+  } else {
+    btn.disabled = false; btn.textContent = 'Complete Registration ✓';
+    showGlobal('Registration failed: ' + result.error);
+  }
+}
+</script>
+</body>
+</html>
