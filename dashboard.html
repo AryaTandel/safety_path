@@ -2600,7 +2600,7 @@ function startNavigation() {
 
   // 2. Start live tracking
   if (!trackingOn) {
-    if (typeof startLiveTracking === 'function') startLiveTracking();
+    startLiveTracking();
     trackingOn = true;
   }
 
@@ -2829,11 +2829,10 @@ function exitNavigation() {
   document.documentElement.style.removeProperty('--peek-h');
   document.documentElement.style.removeProperty('--hud-h');
 
-  // Stop live tracking watch if running
-  if (liveWatchId !== null) {
-    navigator.geolocation.clearWatch(liveWatchId);
-    liveWatchId = null;
-  }
+  // Stop live tracking and clear traversed path
+  stopLiveTracking();
+  if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
+  traversedCoords = [];
 
   // ── Full reset to fresh dashboard state ───────────────────────────────────
   // Clear all route layers
@@ -2929,6 +2928,99 @@ function applyStoredTheme() {
     document.getElementById('icon-sun').style.display='none';
     document.getElementById('icon-moon').style.display='';
   }
+}
+
+// ════════════════════════════════════════
+// LIVE TRACKING — moves the user dot in real time during navigation
+// ════════════════════════════════════════
+// Stores the traversed path coordinates
+let traversedCoords = [];
+let traversedLayer  = null;
+
+function startLiveTracking() {
+  if (liveWatchId !== null) return; // already watching
+
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported on this device');
+    return;
+  }
+
+  // Reset traversed path for new journey
+  traversedCoords = [];
+  if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
+
+  liveWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+
+      // Move the pulsing location marker to new position
+      placeLocationMarker(lat, lng, acc);
+
+      // Update fromCoords so route re-fetches use current position
+      fromCoords = [lat, lng];
+
+      // ── Dim the already-travelled portion of the active route ──────────
+      // Find the closest point on the selected route polyline to the user,
+      // then split the route: dim everything before that point (travelled)
+      // and keep the original colour for everything ahead (remaining).
+      traversedCoords.push([lat, lng]);
+      if (routeLayers[selIdx]) {
+        const routeLatLngs = routeLayers[selIdx].getLatLngs();
+        if (routeLatLngs.length > 1) {
+          // Find index of closest route point to current position
+          let closestIdx = 0;
+          let minDist = Infinity;
+          for (let i = 0; i < routeLatLngs.length; i++) {
+            const d = getDistance(lat, lng, routeLatLngs[i].lat, routeLatLngs[i].lng);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+          }
+          // Only update if user is actually close to the route (within 100m)
+          if (minDist < 100 && closestIdx > 0) {
+            const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+            const activeColor = CLR[selIdx] || '#2dd4bf';
+
+            // Remove travelled portion completely — only show remaining route ahead
+            routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
+            routeLayers[selIdx].setStyle({
+              color: activeColor, weight: 6, opacity: 0.9
+            });
+            routeLayers[selIdx].bringToFront();
+          }
+        }
+      }
+
+      // Check if user is near any risk zones
+      if (crimeZones.length) checkLiveRisk(lat, lng);
+
+      // Check arrival — if within 30m of destination, trigger feedback
+      if (toCoords && !_journeyEnded) {
+        const distToDest = getDistance(lat, lng, toCoords[0], toCoords[1]);
+        if (distToDest < 30) {
+          _journeyEnded = true;
+          showToast('You have arrived! 🎉');
+          stopLiveTracking();
+          setTimeout(openFeedbackModal, 1500);
+        }
+      }
+    },
+    err => {
+      console.warn('Live tracking error:', err.message);
+      // Don't stop tracking on error — GPS can recover
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0        // always fresh position, never cached
+    }
+  );
+}
+
+function stopLiveTracking() {
+  if (liveWatchId !== null) {
+    navigator.geolocation.clearWatch(liveWatchId);
+    liveWatchId = null;
+  }
+  trackingOn = false;
 }
 
 // ════════════════════════════════════════
