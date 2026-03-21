@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>SafePath — Women's Safety Navigator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
@@ -114,16 +116,28 @@ html.light{
   --grad-accent:linear-gradient(135deg,#0e9488,#34d399);
 }
 
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--font-b);transition:background 0.3s,color 0.3s}
-#app{display:flex;height:100vh}
+html,body{
+  height:100%;
+  /* Use dvh (dynamic viewport height) on iPhone — accounts for Safari toolbar */
+  height:100dvh;
+  overflow:hidden;
+  background:var(--bg);color:var(--fg);font-family:var(--font-b);
+  transition:background 0.3s,color 0.3s;
+  /* Prevent iOS bounce scroll */
+  overscroll-behavior:none;
+  -webkit-overflow-scrolling:touch;
+}
+#app{display:flex;height:100vh;height:100dvh}
 
 /* ══════ TOPBAR ══════ */
 #topbar{
-  position:fixed;top:0;left:0;right:0;z-index:1000;height:56px;
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  height:calc(56px + env(safe-area-inset-top));
+  padding-top:env(safe-area-inset-top);
   background:var(--topbar-bg);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   border-bottom:1px solid var(--border);
-  display:flex;align-items:center;padding:0 1.1rem;gap:0.85rem;
+  display:flex;align-items:center;padding-left:1.1rem;padding-right:1.1rem;gap:0.85rem;
   transition:background 0.3s,border-color 0.3s;
 }
 
@@ -190,7 +204,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
 
 /* ══════ PANEL ══════ */
 #panel{
-  width:var(--panel);height:100vh;padding-top:56px;
+  width:var(--panel);height:100vh;height:100dvh;
+  padding-top:calc(56px + env(safe-area-inset-top));
   background:var(--panel-bg);
   border-right:1px solid var(--border);
   display:flex;flex-direction:column;z-index:100;overflow:hidden;flex-shrink:0;
@@ -246,7 +261,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
 #pi::-webkit-scrollbar-thumb{background:var(--teal-dark);border-radius:3px}
 
 /* ══════ MAP ══════ */
-#mw{flex:1;padding-top:56px;position:relative;box-sizing:border-box}
+#mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
 
 /* ══════ LEAFLET OVERRIDES ══════ */
@@ -471,6 +486,38 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
 }
 .loc-ring2{animation-delay:0.75s!important}
 @keyframes locP{0%{transform:translate(-50%,-50%) scale(0.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}}
+
+/* Navigation arrow marker */
+.nav-arrow-wrap{
+  position:relative;
+  width:36px;height:36px;
+  display:flex;align-items:center;justify-content:center;
+}
+.nav-arrow{
+  width:0;height:0;
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-bottom:28px solid #2dd4bf;
+  filter:drop-shadow(0 2px 6px rgba(45,212,191,0.7));
+  position:relative;z-index:2;
+  transition:transform 0.15s ease-out;
+  transform-origin:center center;
+}
+.nav-arrow::after{
+  content:'';
+  position:absolute;
+  bottom:-28px;left:-6px;
+  width:12px;height:10px;
+  background:#2dd4bf;
+  border-radius:0 0 4px 4px;
+}
+.nav-arrow-ring{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(45,212,191,0.15);
+  border:2px solid rgba(45,212,191,0.4);
+  position:absolute;top:0;left:0;
+  animation:locP 2s ease-out infinite;
+}
 
 /* ══════ SOS BANNER — non-blocking, floats over map ══════ */
 #sm{
@@ -710,16 +757,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
 
 @media(max-width:640px){
   #panel{
-    position:fixed;bottom:0;top:auto;width:100%;height:56vh;
+    position:fixed;bottom:0;top:auto;width:100%;
+    height:calc(56vh + env(safe-area-inset-bottom));
     border-right:none;border-top:1.5px solid var(--border);
     border-radius:20px 20px 0 0;z-index:500;padding-top:0;
+    padding-bottom:env(safe-area-inset-bottom);
   }
   #panel::before{
     content:'';display:block;width:36px;height:3.5px;
     background:var(--border);border-radius:2px;margin:0.75rem auto 0.2rem;
   }
   #panel::after{top:0;border-radius:20px 20px 0 0}
-  #mw{padding-top:56px}
+  #mw{padding-top:calc(56px + env(safe-area-inset-top))}
+  /* Larger touch targets on mobile */
+  .btn,.sbt,.lbt,.cat-btn,.nd-mode-btn,.nd-route-item{min-height:44px}
+  .nav-btn-sos,.nav-btn-exit{width:70px;height:70px}
+  #nstat-time-val{font-size:2.2rem}
+  .aci{padding:0.8rem 0.9rem;min-height:52px}
 }
 
 /* ══════ NAVIGATION HUD — unified bottom sheet ══════ */
@@ -746,6 +800,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
   box-shadow: 0 -10px 48px var(--shadow);
   overflow: hidden;
   max-height: 88vh;
+  /* Account for iPhone home bar */
+  padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;
   transition: transform 0.42s cubic-bezier(0.4,0,0.2,1);
@@ -935,6 +991,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
 .layer-ctrl-btn.heat-on  { background: rgba(245,158,11,0.18) !important; border-color: #f59e0b !important; color: #f59e0b !important; }
 .layer-ctrl-btn.zone-on  { background: rgba(244,63,94,0.15)  !important; border-color: #f43f5e !important; color: #f43f5e  !important; }
 
+
+/* ══════ IPHONE SAFARI SPECIFIC ══════ */
+@supports (-webkit-touch-callout: none) {
+  /* Prevent text size adjustment on rotation */
+  html { -webkit-text-size-adjust: 100%; }
+  /* Fix input zoom on focus (Safari zooms when font < 16px) */
+  input, select, textarea { font-size: 16px !important; }
+  /* Smooth scrolling in panel */
+  #pi { -webkit-overflow-scrolling: touch; }
+  /* Fix tap highlight */
+  * { -webkit-tap-highlight-color: transparent; }
+}
 </style>
 </head>
 <body>
@@ -1552,6 +1620,8 @@ async function findRoutes() {
   if (!fromCoords) { showToast('Select a starting point first'); return; }
   if (!toCoords)   { showToast('Select a destination first'); return; }
   if (window.ORS_API_KEY === 'YOUR_ORS_API_KEY') { showToast('Add your ORS API key first'); return; }
+  // During live navigation, don't redraw all routes — only recalc HUD stats
+  if (trackingOn) { showToast('Change mode after ending navigation'); return; }
 
   const btn = document.getElementById('bfind');
   btn.disabled = true;
@@ -2159,43 +2229,62 @@ const LOC_ICON_HTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
 function centreOnUser() {
   if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
   const btn = document.querySelector('.locate-btn');
+  const navBtn = document.getElementById('nav-locate-btn');
   if (btn) btn.classList.add('locating');
+
+  function applyPos(lat, lng, acc) {
+    // Centre map immediately
+    map.flyTo([lat, lng], 17, { animate: true, duration: 0.6 });
+    // Place/update marker
+    placeLocationMarker(lat, lng, acc, _navMode ? _lastHeading : null);
+    fromCoords = [lat, lng];
+    if (btn) btn.classList.remove('locating');
+  }
+
+  // Step 1: use any cached position instantly (feels responsive)
   navigator.geolocation.getCurrentPosition(
-    pos => {
-      const { latitude:lat, longitude:lng, accuracy:acc } = pos.coords;
-      map.setView([lat, lng], 16, { animate:true });
-      if (!fromCoords) {
-        fromCoords = [lat, lng];
-        placeLocationMarker(lat, lng, acc);
-      } else if (!liveMarker) {
-        placeLocationMarker(lat, lng, acc);
-      }
-      if (btn) btn.classList.remove('locating');
-    },
-    () => {
-      if (btn) btn.classList.remove('locating');
-      showToast('Could not get location');
-    },
-    { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+    pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => { if (btn) btn.classList.remove('locating'); showToast('Could not get location'); },
+    { enableHighAccuracy: false, timeout: 2000, maximumAge: 10000 }
+  );
+
+  // Step 2: also get accurate fix in background and refine if different
+  navigator.geolocation.getCurrentPosition(
+    pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
   );
 }
 
-function placeLocationMarker(lat, lng, accuracy) {
+function placeLocationMarker(lat, lng, accuracy, heading) {
   if (locMarker) { map.removeLayer(locMarker); locMarker=null; }
   if (locAccCircle) { map.removeLayer(locAccCircle); locAccCircle=null; }
   locAccCircle=L.circle([lat,lng],{
-    radius:Math.min(accuracy,500),
+    radius:Math.min(accuracy,200),
     color:'#2dd4bf',weight:1,fillColor:'#2dd4bf',fillOpacity:0.06
   }).addTo(map);
-  const icon=L.divIcon({
-    className:'',
-    html:'<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>',
-    iconSize:[20,20],iconAnchor:[10,10],popupAnchor:[0,-12]
-  });
-  locMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
-    .bindPopup('<div style="font-family:\'Nunito\',sans-serif;text-align:center;padding:0.2rem 0.4rem">'
+
+  let iconHtml, iconSize, iconAnchor;
+  if (_navMode && heading !== null && heading !== undefined) {
+    // Navigation mode — directional arrow rotated to heading
+    iconHtml = '<div class="nav-arrow-wrap">'
+      + '<div class="nav-arrow-ring"></div>'
+      + '<div class="nav-arrow" style="transform:rotate('+heading+'deg)"></div>'
+      + '</div>';
+    iconSize   = [36, 36];
+    iconAnchor = [18, 18];
+  } else {
+    // Default — pulsing dot
+    iconHtml   = '<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>';
+    iconSize   = [20, 20];
+    iconAnchor = [10, 10];
+  }
+
+  const icon = L.divIcon({ className:'', html:iconHtml, iconSize, iconAnchor, popupAnchor:[0,-12] });
+  locMarker = L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
+    .bindPopup('<div style="font-family:Nunito,sans-serif;text-align:center;padding:0.2rem 0.4rem">'
       +'<div style="font-weight:700;font-size:0.86rem">Current Location</div>'
-      +'<div style="font-size:0.7rem;color:var(--muted)">±'+Math.round(accuracy)+'m</div></div>');
+      +'<div style="font-size:0.7rem;color:var(--muted)">&#177;'+Math.round(accuracy)+'m</div></div>');
 }
 
 function useMyLocation() {
@@ -2608,40 +2697,72 @@ function startNavigation() {
   showNavHud();
 
   // 4. Get GPS, place marker, zoom ALL the way in to user
-  function doNavAnimation(userLat, userLng, userAcc) {
-    placeLocationMarker(userLat, userLng, userAcc);
-    // Wait for panel collapse + map resize, then zoom max into user
-    setTimeout(() => {
-      // First fit the full route with HUD padding, then fly to user
-      const hudH = (document.getElementById('nav-hud') || {}).offsetHeight || 145;
-      const br   = hudH + 20;
-      if (curRoutes.length && routeLayers[selIdx]) {
-        map.flyToBounds(routeLayers[selIdx].getBounds(), {
-          paddingTopLeft:[52,52], paddingBottomRight:[52, br],
-          animate:true, duration:1.0, maxZoom:16
-        });
-        // Then zoom in to user after route is visible
-        setTimeout(() => {
-          map.flyTo([userLat, userLng], 17, { animate: true, duration: 1.4 });
-        }, 1200);
+  // ── STEP 1: Show arrow IMMEDIATELY from known position ─────────────────
+  // Don't wait for GPS — use fromCoords right now so the arrow appears
+  // the instant Start Navigation is tapped.
+  const initLat = fromCoords ? fromCoords[0] : 19.076;
+  const initLng = fromCoords ? fromCoords[1] : 72.877;
+
+  // Show arrow at known position immediately
+  placeLocationMarker(initLat, initLng, 30, _lastHeading);
+
+  // Hide non-selected routes immediately
+  if (routeLayers && routeLayers.length) {
+    routeLayers.forEach((layer, i) => {
+      if (!layer) return;
+      if (i !== selIdx) {
+        map.removeLayer(layer);
       } else {
-        map.flyTo([userLat, userLng], 17, { animate: true, duration: 1.6 });
+        const ll = layer.getLatLngs();
+        if (ll && ll.length > 1) {
+          ll[0] = L.latLng(initLat, initLng);
+          layer.setLatLngs(ll);
+          layer.setStyle({ opacity: 0.9, weight: 6 });
+        }
       }
-    }, 450);
+    });
   }
 
+  // Remove start marker — arrow replaces it
+  if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+
+  // Animate map immediately
+  setTimeout(() => {
+    const hudH = (document.getElementById('nav-hud') || {}).offsetHeight || 145;
+    const br   = hudH + 20;
+    if (curRoutes.length && routeLayers[selIdx]) {
+      map.flyToBounds(routeLayers[selIdx].getBounds(), {
+        paddingTopLeft:[52,52], paddingBottomRight:[52, br],
+        animate:true, duration:0.9, maxZoom:16
+      });
+      setTimeout(() => {
+        map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
+      }, 1000);
+    } else {
+      map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
+    }
+  }, 420);
+
+  // ── STEP 2: Refine with accurate GPS fix in background ───────────────
+  // Once the real GPS fix arrives, update marker + repin route silently.
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      pos => doNavAnimation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
-      () => {
-        const [lat, lng] = fromCoords || [19.076, 72.8777];
-        doNavAnimation(lat, lng, 50);
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+        fromCoords = [lat, lng];
+        placeLocationMarker(lat, lng, acc, _lastHeading);
+        // Repin route start to accurate position
+        const layer = routeLayers[selIdx];
+        if (layer && map.hasLayer(layer)) {
+          const ll = layer.getLatLngs();
+          if (ll && ll.length > 1) { ll[0] = L.latLng(lat, lng); layer.setLatLngs(ll); }
+        }
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
     );
-  } else {
-    const [lat, lng] = fromCoords || [19.076, 72.8777];
-    doNavAnimation(lat, lng, 50);
   }
 }
 
@@ -2675,8 +2796,7 @@ function showNavHud() {
   // Map layers now controlled via on-map buttons (no HUD layer toggles)
 
   updateNavStats();
-  clearInterval(_navEtaInterval);
-  _navEtaInterval = setInterval(updateNavStats, 30000);
+  // Stats now update every GPS tick — no polling interval needed
 
   // HUD is position:fixed — no padding needed on map wrapper.
   setTimeout(() => {
@@ -2719,26 +2839,61 @@ function updateNavStats() {
   if (!curRoutes.length || selIdx >= curRoutes.length) return;
   const r = curRoutes[selIdx];
 
-  // Distance
-  const distEl = document.getElementById('nstat-dist');
-  if (distEl) distEl.textContent = r.dist || '—';
+  // ── Live calculation from current GPS position to destination ─────────
+  // If user is navigating, recalculate remaining distance + time from
+  // their actual position rather than using the original route distance.
+  let distM   = r.distM || 0;
+  let durSecs = r.durSecs || 0;
 
-  // Time left — big centred value
-  const timeEl = document.getElementById('nstat-time-val');
-  if (timeEl) timeEl.textContent = r.dur || '—';
+  if (_navMode && fromCoords && toCoords) {
+    // Remaining straight-line distance GPS → destination
+    const remainDist = getDistance(fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]);
 
-  // ETA = now + durSecs
-  const etaEl = document.getElementById('nstat-eta');
-  if (etaEl) {
-    if (r.durSecs) {
-      const eta = new Date(Date.now() + r.durSecs * 1000);
-      const hh = eta.getHours().toString().padStart(2,'0');
-      const mm = eta.getMinutes().toString().padStart(2,'0');
-      etaEl.textContent = hh + ':' + mm;
-    } else {
-      etaEl.textContent = '—';
+    // Also add up remaining route polyline distance if route layer exists
+    let routeDist = 0;
+    const activeLayer = routeLayers[selIdx];
+    if (activeLayer && map.hasLayer(activeLayer)) {
+      const ll = activeLayer.getLatLngs();
+      for (let i = 0; i < ll.length - 1; i++) {
+        routeDist += getDistance(ll[i].lat, ll[i].lng, ll[i+1].lat, ll[i+1].lng);
+      }
     }
+    // Use route distance if available (more accurate), else straight-line
+    distM = routeDist > 10 ? routeDist : remainDist;
+
+    // Use actual GPS speed if available, otherwise fall back to mode average
+    const defaultSpeed = travelMode === 'driving-car'     ? 11.1  // 40 km/h
+                       : travelMode === 'cycling-regular' ?  4.2  // 15 km/h
+                       :                                     1.4; // 5 km/h
+    const speedMps = (_liveSpeedMps !== null && _liveSpeedMps > 0.3)
+                   ? _liveSpeedMps   // real measured speed from phone GPS
+                   : defaultSpeed;   // fallback when standing still
+    durSecs = distM / speedMps;
   }
+
+  // Format distance
+  const distStr = distM < 1000
+    ? Math.round(distM) + ' m'
+    : (distM / 1000).toFixed(1) + ' km';
+
+  // Format time
+  const durMin = Math.round(durSecs / 60);
+  const timeStr = durMin >= 60
+    ? Math.floor(durMin/60) + 'h ' + (durMin%60 > 0 ? durMin%60+'m' : '')
+    : durMin + ' min';
+
+  // ETA
+  const eta = new Date(Date.now() + durSecs * 1000);
+  const etaStr = eta.getHours().toString().padStart(2,'0') + ':'
+               + eta.getMinutes().toString().padStart(2,'0');
+
+  // Update HUD
+  const distEl = document.getElementById('nstat-dist');
+  if (distEl) distEl.textContent = distStr;
+  const timeEl = document.getElementById('nstat-time-val');
+  if (timeEl) timeEl.textContent = timeStr;
+  const etaEl  = document.getElementById('nstat-eta');
+  if (etaEl)  etaEl.textContent  = etaStr;
 }
 
 // Map click handler to close the nav drawer
@@ -2841,6 +2996,8 @@ function exitNavigation() {
   curRoutes = [];
   selIdx = 0;
 
+  // Restore any hidden route layers before clearing
+  routeLayers.forEach(l => { if (l && !map.hasLayer(l)) map.addLayer(l); });
   // Clear route markers but KEEP the live location marker + accuracy circle
   if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
   if (toMarker)   { map.removeLayer(toMarker);   toMarker   = null; }
@@ -2936,6 +3093,88 @@ function applyStoredTheme() {
 // Stores the traversed path coordinates
 let traversedCoords = [];
 let traversedLayer  = null;
+let _lastHeading        = null;   // last known heading in degrees
+let _liveSpeedMps       = null;   // actual GPS speed in m/s (updated each tick)
+let _navMode            = false;  // true when actively navigating
+let _compassHeading     = null;   // from device compass (more accurate than GPS heading)
+let _compassListener    = null;   // reference to remove listener on exit
+
+// ── Device compass — fires whenever phone rotates ─────────────────────────
+function startCompass() {
+  if (!window.DeviceOrientationEvent) return;
+
+  let _lastCompassUpdate = 0;
+
+  function handleOrientation(e) {
+    let heading = null;
+
+    // iOS — webkitCompassHeading is 0=North clockwise, most accurate
+    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+      heading = e.webkitCompassHeading;
+    } else if (e.absolute && e.alpha !== null) {
+      // Android absolute — convert counter-clockwise to clockwise from North
+      heading = (360 - e.alpha) % 360;
+    } else if (e.alpha !== null) {
+      // Android non-absolute fallback
+      heading = (360 - e.alpha) % 360;
+    }
+
+    if (heading === null) return;
+
+    _compassHeading = heading;
+    _lastHeading    = heading;
+
+    if (!_navMode) return;
+
+    // Throttle DOM updates to max 30fps — compass fires 50-60 times/sec
+    const now = Date.now();
+    if (now - _lastCompassUpdate < 33) return;
+    _lastCompassUpdate = now;
+
+    // ── Fast path: just rotate the existing arrow element via CSS ──────
+    // Avoids destroying/recreating the Leaflet marker every tick.
+    const arrowEl = document.querySelector('.nav-arrow');
+    if (arrowEl) {
+      arrowEl.style.transform = 'rotate(' + heading + 'deg)';
+      return; // done — no need to recreate marker
+    }
+
+    // ── Slow path: marker doesn't exist yet, create it ──────────────────
+    if (locMarker) {
+      const ll = locMarker.getLatLng();
+      placeLocationMarker(ll.lat, ll.lng, 20, heading);
+    } else if (fromCoords) {
+      placeLocationMarker(fromCoords[0], fromCoords[1], 20, heading);
+    }
+  }
+
+  // iOS 13+ requires permission
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(perm => {
+        if (perm === 'granted') {
+          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+          window.addEventListener('deviceorientation', handleOrientation, true);
+          _compassListener = handleOrientation;
+        }
+      })
+      .catch(() => {});
+  } else {
+    // Android — no permission needed
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+    _compassListener = handleOrientation;
+  }
+}
+
+function stopCompass() {
+  if (_compassListener) {
+    window.removeEventListener('deviceorientationabsolute', _compassListener, true);
+    window.removeEventListener('deviceorientation',         _compassListener, true);
+    _compassListener = null;
+  }
+  _compassHeading = null;
+}
 
 function startLiveTracking() {
   if (liveWatchId !== null) return; // already watching
@@ -2947,47 +3186,93 @@ function startLiveTracking() {
 
   // Reset traversed path for new journey
   traversedCoords = [];
+  _lastHeading = null;
+  _navMode = true;
+  startCompass();
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
 
   liveWatchId = navigator.geolocation.watchPosition(
     pos => {
-      const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+      const { latitude: lat, longitude: lng, accuracy: acc, heading: rawHeading, speed: gpsSpeed } = pos.coords;
+      // Track actual speed — GPS speed is in m/s, only use if valid
+      if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
 
-      // Move the pulsing location marker to new position
-      placeLocationMarker(lat, lng, acc);
+      // Heading priority: 1) device compass, 2) GPS heading, 3) computed from movement
+      let heading = null;
+      if (_compassHeading !== null) {
+        // Most accurate — phone compass knows exact direction phone faces
+        heading = _compassHeading;
+        _lastHeading = heading;
+      } else if (rawHeading !== null && rawHeading >= 0) {
+        heading = rawHeading;
+        _lastHeading = heading;
+      } else if (traversedCoords.length >= 1) {
+        // Compute bearing from last known position to current
+        const prev = traversedCoords[traversedCoords.length - 1];
+        const dLng = (lng - prev[1]) * Math.PI / 180;
+        const lat1 = prev[0] * Math.PI / 180;
+        const lat2 = lat  * Math.PI / 180;
+        const y = Math.sin(dLng) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+        const bear = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        if (getDistance(lat, lng, prev[0], prev[1]) > 3) { // only update if moved >3m
+          heading = bear;
+          _lastHeading = heading;
+        } else {
+          heading = _lastHeading; // reuse last if barely moved
+        }
+      }
 
-      // Update fromCoords so route re-fetches use current position
+      // Move arrow marker with direction
+      placeLocationMarker(lat, lng, acc, heading);
+
+      // Update fromCoords
       fromCoords = [lat, lng];
-
-      // ── Dim the already-travelled portion of the active route ──────────
-      // Find the closest point on the selected route polyline to the user,
-      // then split the route: dim everything before that point (travelled)
-      // and keep the original colour for everything ahead (remaining).
       traversedCoords.push([lat, lng]);
-      if (routeLayers[selIdx]) {
+
+      // ── Trim route: only remove points BEHIND the user ─────────────────
+      // We find the closest point on the route, then verify it is actually
+      // behind the user (dot product of heading vs route direction < 0).
+      if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
         const routeLatLngs = routeLayers[selIdx].getLatLngs();
         if (routeLatLngs.length > 1) {
-          // Find index of closest route point to current position
+          // Find closest route point
           let closestIdx = 0;
           let minDist = Infinity;
           for (let i = 0; i < routeLatLngs.length; i++) {
             const d = getDistance(lat, lng, routeLatLngs[i].lat, routeLatLngs[i].lng);
             if (d < minDist) { minDist = d; closestIdx = i; }
           }
-          // Only update if user is actually close to the route (within 100m)
-          if (minDist < 100 && closestIdx > 0) {
-            const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
-            const activeColor = CLR[selIdx] || '#2dd4bf';
 
-            // Remove travelled portion completely — only show remaining route ahead
-            routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
-            routeLayers[selIdx].setStyle({
-              color: activeColor, weight: 6, opacity: 0.9
-            });
-            routeLayers[selIdx].bringToFront();
+          if (minDist < 80 && closestIdx > 0) {
+            // Check: is this point really behind us?
+            // Compare bearing from user to the closest point vs user's heading.
+            // If the angle diff > 90° it's ahead (don't trim), if < 90° it's behind (trim).
+            let isBehind = true;
+            if (heading !== null && closestIdx < routeLatLngs.length - 1) {
+              const nextPt = routeLatLngs[closestIdx + 1];
+              const dLng2 = (nextPt.lng - lat) * Math.PI / 180;
+              const lat1b = lat * Math.PI / 180;
+              const lat2b = nextPt.lat * Math.PI / 180;
+              const yb = Math.sin(dLng2) * Math.cos(lat2b);
+              const xb = Math.cos(lat1b) * Math.sin(lat2b) - Math.sin(lat1b) * Math.cos(lat2b) * Math.cos(dLng2);
+              const bearingToNext = (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
+              const angleDiff = Math.abs(((heading - bearingToNext) + 180) % 360 - 180);
+              isBehind = angleDiff < 100; // within 100° means we've passed it
+            }
+
+            if (isBehind) {
+              const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+              routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
+              routeLayers[selIdx].setStyle({ color: CLR[selIdx]||'#2dd4bf', weight:6, opacity:0.9 });
+              routeLayers[selIdx].bringToFront();
+            }
           }
         }
       }
+
+      // Update HUD stats live every GPS tick
+      updateNavStats();
 
       // Check if user is near any risk zones
       if (crimeZones.length) checkLiveRisk(lat, lng);
@@ -3021,6 +3306,13 @@ function stopLiveTracking() {
     liveWatchId = null;
   }
   trackingOn = false;
+  _navMode = false;
+  _liveSpeedMps = null;
+  stopCompass();
+  // Switch back to pulsing dot
+  if (locMarker && fromCoords) {
+    placeLocationMarker(fromCoords[0], fromCoords[1], 20, null);
+  }
 }
 
 // ════════════════════════════════════════
