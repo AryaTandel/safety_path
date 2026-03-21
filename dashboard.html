@@ -949,7 +949,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
     </div>
-    <div class="brand-name">Safety<span>Path</span></div>
+    <div class="brand-name">Safe<span>Path</span></div>
   </a>
 
   <!-- Time + Slot badge -->
@@ -1859,156 +1859,239 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
 
   acT = setTimeout(async () => {
     try {
-      const headers = {'Accept-Language':'en','User-Agent':'SafetyPathApp/1.0'};
-      const searchQ = (forceCategory && !q) ? forceCategory : (q || forceCategory || '');
-      const q2   = encodeURIComponent(searchQ);
-      const qMum = encodeURIComponent(searchQ + ' Mumbai');
-      const base = 'https://nominatim.openstreetmap.org/search';
-
       const userLat = fromCoords ? fromCoords[0] : 19.076;
       const userLng = fromCoords ? fromCoords[1] : 72.877;
 
-      const nearbyBox = '&viewbox='+(userLng-0.05)+','+(userLat-0.05)+','
-                       +(userLng+0.05)+','+(userLat+0.05)+'&bounded=1';
-      const mumbaiBox = '&viewbox=72.70,18.85,73.10,19.45';
+      // ── ICON MAP ──────────────────────────────────────────────────────────
+      const CAT_ICONS = {
+        station:'🚉', hospital:'🏥', school:'🏫', college:'🎓',
+        park:'🌳', bank:'🏦', beach:'🏖️', 'post office':'📮',
+        temple:'🛕', mall:'🛒', hotel:'🏨', police:'👮',
+        pharmacy:'💊', atm:'🏧', restaurant:'🍽️'
+      };
+      function iconFor(type, cat) {
+        if (cat && CAT_ICONS[cat]) return CAT_ICONS[cat];
+        const t = (type||'').toLowerCase();
+        return t.includes('station')||t.includes('halt') ? '🚉'
+          : t.includes('hospital')||t.includes('clinic') ? '🏥'
+          : t.includes('school') ? '🏫'
+          : t.includes('college')||t.includes('university') ? '🎓'
+          : t.includes('restaurant')||t.includes('cafe') ? '🍽️'
+          : t.includes('park')||t.includes('garden') ? '🌳'
+          : t.includes('beach') ? '🏖️'
+          : t.includes('bank') ? '🏦'
+          : t.includes('atm') ? '🏧'
+          : t.includes('post_office')||t.includes('post office') ? '📮'
+          : t.includes('hotel')||t.includes('guest_house') ? '🏨'
+          : t.includes('police') ? '👮'
+          : t.includes('pharmacy') ? '💊' : '📍';
+      }
 
-      async function safeFetch(url) {
-        const proxies = [
-          'https://corsproxy.io/?' + url,
-          'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+      function distStr(lat, lon) {
+        const dLat=(lat-userLat)*Math.PI/180, dLng=(lon-userLng)*Math.PI/180;
+        const a=Math.sin(dLat/2)**2+Math.cos(userLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
+        const d=Math.round(6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+        return d<1000 ? d+' m away' : (d/1000).toFixed(1)+' km away';
+      }
+
+      function showResults(items) {
+        if (!items.length) {
+          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No results found. Try a different name.</div>';
+          dd.style.display='block'; return;
+        }
+        dd.innerHTML='';
+        items.slice(0,8).forEach(({name, fullAddr, label, lat, lon, type, cat}) => {
+          const div=document.createElement('div');
+          div.className='aci';
+          div.dataset.lat=lat; div.dataset.lon=lon;
+          div.dataset.label=label; div.dataset.field=field;
+          div.innerHTML='<strong>'+iconFor(type,cat)+' '+name+'</strong>'
+            +'<div class="aci-addr">'+fullAddr+'</div>'
+            +'<span class="aci-dist">📍 '+distStr(parseFloat(lat),parseFloat(lon))+'</span>';
+          div.addEventListener('click', function() {
+            document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+            document.getElementById('cat-panel').classList.remove('open');
+            document.getElementById('cat-toggle').classList.remove('open');
+            pickPlace(this.dataset.field,this.dataset.lat,this.dataset.lon,this.dataset.label);
+          });
+          dd.appendChild(div);
+        });
+        dd.style.display='block';
+      }
+
+      // ══════════════════════════════════════════════════════════════════════
+      // NEARBY / CATEGORY MODE — Overpass API (proper CORS, works on mobile)
+      // ══════════════════════════════════════════════════════════════════════
+      if (nearbyMode && forceCategory) {
+        const tagMap = {
+          'station':     '["railway"~"station|halt"]',
+          'hospital':    '["amenity"="hospital"]',
+          'school':      '["amenity"="school"]',
+          'college':     '["amenity"~"college|university"]',
+          'park':        '["leisure"="park"]',
+          'bank':        '["amenity"="bank"]',
+          'beach':       '["natural"="beach"]',
+          'post office': '["amenity"="post_office"]',
+          'temple':      '["amenity"="place_of_worship"]',
+          'mall':        '["shop"~"mall|supermarket"]',
+          'hotel':       '["tourism"~"hotel|guest_house"]',
+          'police':      '["amenity"="police"]',
+          'pharmacy':    '["amenity"="pharmacy"]',
+          'atm':         '["amenity"="atm"]',
+          'restaurant':  '["amenity"~"restaurant|cafe|fast_food"]',
+        };
+        const tag = tagMap[forceCategory];
+        if (!tag) { dd.style.display='none'; return; }
+
+        // Use two Overpass mirrors for reliability
+        const radius = 5000;
+        const query = `[out:json][timeout:15];(node${tag}(around:${radius},${userLat},${userLng});way${tag}(around:${radius},${userLat},${userLng});relation${tag}(around:${radius},${userLat},${userLng}););out center tags 30;`;
+        const mirrors = [
+          'https://overpass-api.de/api/interpreter',
+          'https://overpass.kumi.systems/api/interpreter',
+          'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
         ];
-        for (const pu of proxies) {
+
+        let elements = [];
+        for (const mirror of mirrors) {
           try {
             const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 6000);
-            const r = await fetch(pu, { headers, signal:ctrl.signal });
+            const t = setTimeout(() => ctrl.abort(), 15000);
+            const r = await fetch(mirror, {
+              method: 'POST',
+              body: 'data=' + encodeURIComponent(query),
+              signal: ctrl.signal
+            });
             clearTimeout(t);
             if (!r.ok) continue;
-            const text = await r.text();
-            if (!text || text.trim()==='') continue;
-            const data = JSON.parse(text);
-            if (Array.isArray(data)) return data;
+            const d = await r.json();
+            elements = d.elements || [];
+            if (elements.length) break;
           } catch { continue; }
         }
-        return [];
+
+        if (!elements.length) {
+          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No '+forceCategory+' found nearby. Try increasing range.</div>';
+          dd.style.display='block'; return;
+        }
+
+        const items = elements
+          .map(el => {
+            const lat = String(el.lat || el.center?.lat || 0);
+            const lon = String(el.lon || el.center?.lon || 0);
+            if (!parseFloat(lat) || !parseFloat(lon)) return null;
+            const name = el.tags?.name || el.tags?.['name:en'] || forceCategory;
+            const road = el.tags?.['addr:street'] || el.tags?.['addr:full'] || '';
+            const suburb = el.tags?.['addr:suburb'] || el.tags?.['addr:city'] || 'Mumbai';
+            const fullAddr = [road, suburb].filter(Boolean).join(', ') || 'Mumbai';
+            const label = name + ', ' + suburb;
+            return { name, fullAddr, label, lat, lon, type: forceCategory, cat: forceCategory };
+          })
+          .filter(Boolean);
+
+        // Sort by distance
+        items.sort((a,b) => {
+          const da = getDistance(userLat,userLng,parseFloat(a.lat),parseFloat(a.lon));
+          const db = getDistance(userLat,userLng,parseFloat(b.lat),parseFloat(b.lon));
+          return da - db;
+        });
+
+        showResults(items);
+        return;
       }
 
-      const searches = [];
+      // ══════════════════════════════════════════════════════════════════════
+      // TEXT SEARCH MODE
+      // Try multiple APIs in order — first one that returns results wins
+      // ══════════════════════════════════════════════════════════════════════
+      const searchQ = q || '';
+      if (searchQ.length < 2) { dd.style.display='none'; return; }
 
-      if (nearbyMode) {
-        const ql = (forceCategory||'').toLowerCase();
-        const cats = [
-          ['station',    '[railway=station]'],
-          ['hospital',   '[amenity=hospital]'],
-          ['school',     '[amenity=school]'],
-          ['college',    '[amenity=college]'],
-          ['park',       '[leisure=park]'],
-          ['bank',       '[amenity=bank]'],
-          ['beach',      '[natural=beach]'],
-          ['post office','[amenity=post_office]'],
-          ['temple',     '[amenity=place_of_worship]'],
-          ['mall',       '[shop=mall]'],
-          ['hotel',      '[tourism=hotel]'],
-          ['police',     '[amenity=police]'],
-          ['pharmacy',   '[amenity=pharmacy]'],
-          ['atm',        '[amenity=atm]'],
-          ['restaurant', '[amenity=restaurant]'],
-        ];
-        if (searchQ) {
-          searches.push(safeFetch(base+'?q='+q2+'&format=json&limit=20&countrycodes=in'+nearbyBox+'&addressdetails=1&dedupe=1'));
-        }
-        for (const [cat, tag] of cats) {
-          if (forceCategory===cat || ql.includes(cat)) {
-            searches.push(safeFetch(base+'?q='+encodeURIComponent(tag+' '+(searchQ||''))+'&format=json&limit=20&countrycodes=in'+nearbyBox+'&addressdetails=1'));
+      let items = [];
+
+      // ── API 1: Photon (Komoot) — proper CORS, no API key, very reliable ──
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQ+' Mumbai')}&limit=10&lat=${userLat}&lon=${userLng}&lang=en`;
+        const r = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (r.ok) {
+          const d = await r.json();
+          const features = d.features || [];
+          const seenKeys = new Set();
+          for (const f of features) {
+            const p = f.properties || {};
+            // Only Mumbai results
+            if (p.country !== 'India') continue;
+            const coords = f.geometry?.coordinates;
+            if (!coords) continue;
+            const lon = String(coords[0]), lat = String(coords[1]);
+            const name = p.name || p.street || searchQ;
+            const area = p.district || p.suburb || p.city || 'Mumbai';
+            const city = p.city || 'Mumbai';
+            const street = p.street || '';
+            const fullAddr = [street, area, city].filter((x,i,a)=>x&&a.indexOf(x)===i).join(', ');
+            const label = name + ', ' + area + ', ' + city;
+            const key = (name+'|'+area).toLowerCase().trim();
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+            items.push({ name, fullAddr, label, lat, lon, type: p.osm_value || p.type || '' });
+            if (items.length >= 8) break;
           }
         }
-      } else {
-        searches.push(safeFetch(base+'?q='+q2  +'&format=json&limit=10&countrycodes=in'+mumbaiBox+'&addressdetails=1&dedupe=1'));
-        searches.push(safeFetch(base+'?q='+qMum+'&format=json&limit=10&countrycodes=in&addressdetails=1&dedupe=1'));
+      } catch(e) { console.warn('Photon failed:', e); }
+
+      // ── API 2: Nominatim direct — fallback ───────────────────────────────
+      if (!items.length) {
+        const nominatimUrls = [
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ+' Mumbai')}&format=json&limit=10&countrycodes=in&addressdetails=1&dedupe=1`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ)}&format=json&limit=10&countrycodes=in&viewbox=72.70,18.85,73.10,19.45&addressdetails=1`,
+        ];
+        for (const url of nominatimUrls) {
+          try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000);
+            const r = await fetch(url, { headers:{'Accept-Language':'en'}, signal:ctrl.signal });
+            clearTimeout(t);
+            if (!r.ok) continue;
+            const data = await r.json();
+            if (!Array.isArray(data) || !data.length) continue;
+            const seenKeys = new Set();
+            for (const item of data) {
+              if (!item.lat || !item.lon) continue;
+              const a = item.address || {};
+              const name = item.name || item.display_name.split(',')[0];
+              const area = a.suburb||a.neighbourhood||a.city_district||'';
+              const city = a.city||a.town||'Mumbai';
+              const road = a.road||a.pedestrian||a.footway||'';
+              const fullAddr = [road,area,city].filter(Boolean).join(', ');
+              const label = name+(area?', '+area+', '+city:', '+city);
+              const key = (name+'|'+area).toLowerCase().trim();
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              items.push({ name, fullAddr, label, lat:item.lat, lon:item.lon, type:item.type||'' });
+              if (items.length >= 8) break;
+            }
+            if (items.length) break;
+          } catch { continue; }
+        }
       }
 
-      if (!searches.length) { dd.style.display='none'; return; }
-
-      const results = await Promise.all(searches);
-      let merged = results.flat().filter(i => i && i.lat && i.lon);
-
-      if (!merged.length) {
-        dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">'
-          +(nearbyMode ? 'No results found nearby.' : 'No results found. Try a different name.')+'</div>';
+      if (!items.length) {
+        dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No results found. Try a different name.</div>';
         dd.style.display='block'; return;
       }
 
-      merged = merged.map(item => {
-        const iLat=parseFloat(item.lat), iLng=parseFloat(item.lon);
-        const dLat=(iLat-userLat)*Math.PI/180, dLng=(iLng-userLng)*Math.PI/180;
-        const a=Math.sin(dLat/2)**2+Math.cos(userLat*Math.PI/180)*Math.cos(iLat*Math.PI/180)*Math.sin(dLng/2)**2;
-        return {...item, _dist:6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))};
-      });
-
-      if (nearbyMode) merged.sort((a,b) => a._dist - b._dist);
-
-      const seenIds=new Set(), seenKeys=new Set(), deduped=[];
-      for (const item of merged) {
-        if (item.osm_id && seenIds.has(item.osm_id)) continue;
-        if (item.osm_id) seenIds.add(item.osm_id);
-        const a=item.address||{};
-        const name=item.name||item.display_name.split(',')[0];
-        const road=a.road||a.pedestrian||a.footway||'';
-        const area=a.suburb||a.neighbourhood||a.city_district||'';
-        const city=a.city||a.town||'Mumbai';
-        const pin=a.postcode||'';
-        const fullAddr=[road,area,city,pin].filter(Boolean).join(', ');
-        const sub=[area,city].filter(Boolean).join(', ');
-        const label=name+(sub?', '+sub:'');
-        const key=(name+'|'+area).toLowerCase().trim();
-        if (seenKeys.has(key)) continue;
-        seenKeys.add(key);
-        const distM=Math.round(item._dist);
-        const distStr=distM<1000?distM+' m away':(distM/1000).toFixed(1)+' km away';
-        deduped.push({item,name,fullAddr,label,distStr});
-        if (deduped.length>=8) break;
-      }
-      if (!deduped.length) { dd.style.display='none'; return; }
-
-      dd.innerHTML='';
-      deduped.forEach(({item,name,fullAddr,label,distStr}) => {
-        const t=item.type||item.class||'';
-        const icon=t==='station'||t==='halt'?'🚉'
-          :t==='hospital'||t==='clinic'?'🏥'
-          :t==='school'?'🏫'
-          :t==='college'||t==='university'?'🎓'
-          :t==='restaurant'||t==='cafe'?'🍽️'
-          :t==='park'||t==='garden'?'🌳'
-          :t==='beach'?'🏖️'
-          :t==='bank'?'🏦'
-          :t==='atm'?'🏧'
-          :t==='post_office'?'📮'
-          :t==='hotel'||t==='guest_house'?'🏨'
-          :t==='police'?'👮'
-          :t==='pharmacy'?'💊':'📍';
-        const div=document.createElement('div');
-        div.className='aci';
-        div.dataset.lat=item.lat; div.dataset.lon=item.lon;
-        div.dataset.label=label; div.dataset.field=field;
-        div.innerHTML='<strong>'+icon+' '+name+'</strong>'
-          +'<div class="aci-addr">'+fullAddr+'</div>'
-          +'<span class="aci-dist">📍 '+distStr+'</span>';
-        div.addEventListener('click', function() {
-          document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
-          document.getElementById('cat-panel').classList.remove('open');
-          document.getElementById('cat-toggle').classList.remove('open');
-          pickPlace(this.dataset.field,this.dataset.lat,this.dataset.lon,this.dataset.label);
-        });
-        dd.appendChild(div);
-      });
-      dd.style.display='block';
+      showResults(items);
 
     } catch(e) {
       console.warn('acSearch error:', e);
       document.getElementById('ac-'+field).style.display='none';
     }
-  }, 200);
+  }, 300);
 }
+
 
 function toggleCatFilters() {
   const toggle=document.getElementById('cat-toggle');
@@ -2285,15 +2368,17 @@ async function reverseGeocode(lat, lng) {
   const localArea = getNearestMumbaiArea(lat, lng);
   const nominatimPath = 'https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&zoom=18&addressdetails=1';
   const proxies = [
+    nominatimPath,
     'https://corsproxy.io/?' + nominatimPath,
     'https://api.allorigins.win/raw?url=' + encodeURIComponent(nominatimPath),
+    'https://thingproxy.freeboard.io/fetch/' + nominatimPath,
   ];
   for (const url of proxies) {
     try {
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 6000);
+      const t = setTimeout(() => ctrl.abort(), 8000);
       const r = await fetch(url, {
-        headers: {'Accept-Language':'en','User-Agent':'SafetyPathApp/1.0'},
+        headers: {'Accept-Language':'en'},
         signal: ctrl.signal
       });
       clearTimeout(t);
