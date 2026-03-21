@@ -219,6 +219,14 @@ html,body{
   border-right: none;
   overflow: hidden;
 }
+/* On mobile, collapsed panel slides down fully */
+@media(max-width:640px) {
+  #panel.collapsed {
+    height: 0;
+    border-top: none;
+  }
+  #mw { height: 100dvh; }
+}
 
 /* Toggle arrow tab — hidden by default, only shown when panel is collapsed */
 #panel-toggle {
@@ -1002,6 +1010,62 @@ html,body{
   #pi { -webkit-overflow-scrolling: touch; }
   /* Fix tap highlight */
   * { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ══════ ANDROID CHROME SPECIFIC ══════ */
+@media screen and (max-width: 640px) {
+  /* Android Chrome address bar changes height dynamically.
+     Use dvh so layout adjusts when bar shows/hides */
+  html, body { height: 100dvh; min-height: 100dvh; }
+  #app { height: 100dvh; min-height: 100dvh; }
+
+  /* Fix input zoom — Chrome also zooms if font-size < 16px */
+  input, select, textarea { font-size: 16px !important; }
+
+  /* Larger touch targets — Android fingers need more space */
+  .btn, .sbt, .lbt, .tbtn, .nd-mode-btn { min-height: 44px; }
+  .cat-btn { min-height: 52px; }
+  .aci { min-height: 52px; padding: 0.85rem 0.9rem; }
+
+  /* Nav HUD buttons bigger on small screens */
+  .nav-btn-sos, .nav-btn-exit { width: 68px; height: 68px; }
+
+  /* Panel inner scroll momentum on Android */
+  #pi, #nav-scroll, #nav-drawer-inner {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent double-tap zoom on buttons */
+  button, a { touch-action: manipulation; }
+
+  /* Fix map controls size on small screens */
+  .layer-ctrl-btn { width: 40px !important; height: 40px !important; }
+  .locate-btn { width: 44px; height: 44px; }
+
+  /* Topbar — tighter on small Android screens */
+  #uchip { display: none; } /* hide welcome chip to save space */
+  .brand-name { font-size: 0.95rem; }
+  #tbadge-date { display: none; } /* hide date on very small screens */
+
+  /* Make route cards easier to tap */
+  .rc { padding: 0.9rem 1rem; }
+  .nd-route-item { padding: 0.65rem 0.85rem; min-height: 52px; }
+
+  /* Autocomplete dropdown — full readable size */
+  .acd { max-height: 240px; }
+
+  /* SOS banner full width on mobile */
+  #sb { max-width: 100%; }
+}
+
+/* Extra small screens (320px wide like iPhone SE / small Androids) */
+@media screen and (max-width: 380px) {
+  :root { --panel: 100%; }
+  #tbadge-slot-label { display: none; }
+  #nstat-time-val { font-size: 1.7rem; }
+  .nav-btn-sos, .nav-btn-exit { width: 58px; height: 58px; }
+  #nav-stats-sub { font-size: 0.65rem; }
 }
 </style>
 </head>
