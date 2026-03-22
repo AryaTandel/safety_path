@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@latest/dist/leaflet-rotate-src.css"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -1349,7 +1349,7 @@ html,body{
      SCRIPTS
 ══════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@latest/dist/leaflet-rotate-src.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
@@ -1425,8 +1425,12 @@ async function initApp() {
     bearing: 0
   }).setView([19.076, 72.8777], 12);
 
-  // Touch does NOT pause follow — map always tracks user
-  // User can freely pan/zoom and map will re-centre on next GPS tick
+  // Re-apply last bearing after zoom so rotation is permanent
+  map.on('zoomend', function() {
+    if (_lastHeading !== null && _navMode && typeof map.setBearing === 'function') {
+      try { map.setBearing(_lastHeading, { animate: false }); } catch(e) {}
+    }
+  });
 
   // Locate button
   const LocateControl = L.Control.extend({
@@ -3390,7 +3394,8 @@ function rotateMapToHeading(heading) {
   if (!_navFollowMode || heading === null || !map) return;
   try {
     if (typeof map.setBearing === 'function') {
-      map.setBearing(heading, { animate: false });
+      // animate:false prevents the slow layer re-render on every compass tick
+      map.setBearing(heading, { animate: false, noMoveStart: true });
     }
   } catch(e) {}
 }
