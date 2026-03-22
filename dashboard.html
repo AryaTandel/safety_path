@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@latest/dist/leaflet-rotate-src.css"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -279,6 +278,12 @@ html,body{
 /* ══════ MAP ══════ */
 #mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
+
+/* Map pane rotation — only rotates tiles/routes, not controls/HUD */
+.leaflet-map-pane {
+  transform-origin: center center;
+  will-change: transform;
+}
 
 /* Map rotation disabled — CSS rotate breaks Leaflet tap/pan coordinates */
 
@@ -1349,7 +1354,6 @@ html,body{
      SCRIPTS
 ══════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://unpkg.com/leaflet-rotate@latest/dist/leaflet-rotate-src.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
@@ -1419,18 +1423,10 @@ async function initApp() {
     doubleClickZoom: true,
     boxZoom: false,
     tap: true,
-    rotate: true,         // leaflet-rotate: enables map bearing
-    touchRotate: true,    // two-finger rotation gesture on mobile
-    rotateControl: false, // hide default rotate control — use our compass btn
-    bearing: 0
+
   }).setView([19.076, 72.8777], 12);
 
-  // Re-apply last bearing after zoom so rotation is permanent
-  map.on('zoomend', function() {
-    if (_lastHeading !== null && _navMode && typeof map.setBearing === 'function') {
-      try { map.setBearing(_lastHeading, { animate: false }); } catch(e) {}
-    }
-  });
+
 
   // Locate button
   const LocateControl = L.Control.extend({
@@ -3392,21 +3388,30 @@ function startCompass() {
 // Map rotation disabled — north-up with auto-pan follow
 function rotateMapToHeading(heading) {
   if (!_navFollowMode || heading === null || !map) return;
-  try {
-    if (typeof map.setBearing === 'function') {
-      // animate:false prevents the slow layer re-render on every compass tick
-      map.setBearing(heading, { animate: false, noMoveStart: true });
-    }
-  } catch(e) {}
+  const pane = document.querySelector('.leaflet-map-pane');
+  if (!pane) return;
+  // Rotate only the map pane (tiles + routes) — instant CSS, no re-render
+  pane.style.transform = 'rotate(' + heading + 'deg)';
+  // Counter-rotate markers so they stay upright
+  const markerPane = document.querySelector('.leaflet-marker-pane');
+  const overlayPane = document.querySelector('.leaflet-overlay-pane');
+  if (markerPane) markerPane.style.transform = 'rotate(' + (-heading) + 'deg)';
+  if (overlayPane) overlayPane.style.transform = 'rotate(' + (-heading) + 'deg)';
 }
 
 function setNavFollowMode(on) {
   _navFollowMode = on;
-  if (!on) return;
-  // When follow re-enabled, snap bearing back to heading
-  if (_lastHeading !== null) {
-    rotateMapToHeading(_lastHeading);
+  if (!on) {
+    // Reset rotation when follow disabled
+    const pane = document.querySelector('.leaflet-map-pane');
+    const markerPane = document.querySelector('.leaflet-marker-pane');
+    const overlayPane = document.querySelector('.leaflet-overlay-pane');
+    if (pane) pane.style.transform = '';
+    if (markerPane) markerPane.style.transform = '';
+    if (overlayPane) overlayPane.style.transform = '';
+    return;
   }
+  if (_lastHeading !== null) rotateMapToHeading(_lastHeading);
 }
 
 // Centre on user during navigation (max zoom, re-enable follow)
@@ -3425,7 +3430,13 @@ function navCentreOnUser() {
 function orientToRoute() {
   // Reset bearing to north-up + re-centre on user + re-enable follow
   _navFollowMode = true;
-  try { if (typeof map.setBearing === 'function') map.setBearing(0); } catch(e) {}
+  // Reset rotation to north-up
+  const pane = document.querySelector('.leaflet-map-pane');
+  const mp   = document.querySelector('.leaflet-marker-pane');
+  const op   = document.querySelector('.leaflet-overlay-pane');
+  if (pane) pane.style.transform = '';
+  if (mp)   mp.style.transform   = '';
+  if (op)   op.style.transform   = '';
   const compassBtn = document.getElementById('nav-compass-btn');
   if (compassBtn) compassBtn.classList.add('active');
   if (fromCoords) {
@@ -3669,8 +3680,6 @@ function stopLiveTracking() {
   _navMode = false;
   _liveSpeedMps = null;
   setNavFollowMode(false);
-  // Reset map to north-up on exit
-  try { if (typeof map.setBearing === 'function') map.setBearing(0); } catch(e) {}
   stopCompass();
   // Switch back to pulsing dot
   if (locMarker && fromCoords) {
