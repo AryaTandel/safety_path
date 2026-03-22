@@ -733,22 +733,41 @@ html,body{
   cursor: pointer;
   color: var(--teal);
   box-shadow: 0 2px 14px var(--shadow);
-  transition: bottom 0.42s cubic-bezier(0.4,0,0.2,1),
-              opacity 0.25s, transform 0.2s;
+  transition: bottom 0.42s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, transform 0.2s;
   opacity: 1;
 }
-#nav-locate-btn.nav-visible {
-  display: flex;
+#nav-locate-btn.nav-visible { display: flex; }
+#nav-locate-btn.nav-hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
+#nav-locate-btn:hover { background: var(--teal-glow); border-color: var(--teal); }
+
+/* Compass/orient button — sits above locate button during navigation */
+#nav-compass-btn {
+  position: fixed;
+  right: 1rem;
+  z-index: 810;
+  width: 42px; height: 42px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--amber);
+  box-shadow: 0 2px 14px var(--shadow);
+  transition: bottom 0.42s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, transform 0.2s;
 }
-#nav-locate-btn.nav-hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.85);
+#nav-compass-btn.nav-visible { display: flex; }
+#nav-compass-btn.nav-hidden { opacity: 0; pointer-events: none; }
+#nav-compass-btn:hover { background: rgba(245,158,11,0.12); border-color: var(--amber); }
+#nav-compass-btn.active {
+  background: rgba(245,158,11,0.15);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.2), 0 2px 14px var(--shadow);
 }
-#nav-locate-btn:hover {
-  background: var(--teal-glow);
-  border-color: var(--teal);
-  transform: scale(1.08);
+/* North indicator needle inside compass */
+#compass-needle {
+  transition: transform 0.3s ease-out;
+  transform-origin: center center;
 }
 
 /* ══════ LEAFLET ZOOM — top-left, just below topbar ══════ */
@@ -1247,8 +1266,20 @@ html,body{
     <button id="sos-circle" onclick="openSOS()">
       <span>SOS</span>
     </button>
+    <!-- Compass/orient button — tap to re-centre + orient route to top -->
+    <button id="nav-compass-btn" onclick="orientToRoute()" title="Orient route to top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <g id="compass-needle">
+          <polygon points="12,3 14.5,12 12,10 9.5,12" fill="var(--red)" stroke="none"/>
+          <polygon points="12,21 14.5,12 12,14 9.5,12" fill="var(--muted)" stroke="none"/>
+        </g>
+        <circle cx="12" cy="12" r="1.5" fill="var(--fg)"/>
+      </svg>
+    </button>
     <!-- Locate button floating above nav sheet during navigation -->
-    <button id="nav-locate-btn" onclick="centreOnUser()" title="Centre on my location">
+    <button id="nav-locate-btn" onclick="navCentreOnUser()" title="Centre on my location">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
@@ -1381,6 +1412,14 @@ async function initApp() {
     tap: true,
   }).setView([19.076, 72.8777], 12);
 
+  // Disable auto-follow when user manually pans/zooms during navigation
+  map.on('dragstart zoomstart', function() {
+    if (_navMode && _navFollowMode) {
+      _navFollowMode = false;
+      const compassBtn = document.getElementById('nav-compass-btn');
+      if (compassBtn) compassBtn.classList.remove('active');
+    }
+  });
 
   // Locate button
   const LocateControl = L.Control.extend({
@@ -1672,10 +1711,45 @@ function setMode(el) {
   travelMode = el.dataset.mode;
   document.querySelectorAll('#mode-sw .sbt').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  // Debounce: only re-fetch if user stopped changing mode for 400ms
-  if (curRoutes.length && fromCoords && toCoords) {
+  if (fromCoords && toCoords) {
     clearTimeout(_modeDebounce);
-    _modeDebounce = setTimeout(() => findRoutes(), 400);
+    _modeDebounce = setTimeout(() => refetchRoutes(), 400);
+  }
+}
+
+// Safe route refetch that works both during and outside navigation
+async function refetchRoutes() {
+  const wasTracking = trackingOn;
+  const wasNav      = _navMode;
+  trackingOn = false;
+  _navMode   = false;
+  try {
+    await findRoutes();
+    trackingOn = wasTracking;
+    _navMode   = wasNav;
+    if (wasNav) {
+      // Re-hide non-selected, repin selected to current GPS
+      routeLayers.forEach((l, i) => {
+        if (!l) return;
+        if (i !== selIdx) { if (map.hasLayer(l)) map.removeLayer(l); }
+        else {
+          if (!map.hasLayer(l)) map.addLayer(l);
+          l.setStyle({ opacity: 0.9, weight: 6 });
+          l.bringToFront();
+          if (fromCoords) {
+            const ll = l.getLatLngs();
+            if (ll && ll.length > 1)
+              l.setLatLngs([L.latLng(fromCoords[0], fromCoords[1]), ...ll.slice(1)]);
+          }
+        }
+      });
+      populateNdRoutes();
+      updateNavStats(true);
+    }
+  } catch(e) {
+    trackingOn = wasTracking;
+    _navMode   = wasNav;
+    showToast('Could not recalculate route');
   }
 }
 
@@ -1686,8 +1760,7 @@ async function findRoutes() {
   if (!fromCoords) { showToast('Select a starting point first'); return; }
   if (!toCoords)   { showToast('Select a destination first'); return; }
   if (window.ORS_API_KEY === 'YOUR_ORS_API_KEY') { showToast('Add your ORS API key first'); return; }
-  // During live navigation, don't redraw all routes — only recalc HUD stats
-  if (trackingOn) { showToast('Change mode after ending navigation'); return; }
+  // trackingOn check removed — ndSetMode manages nav state during reroute
 
   const btn = document.getElementById('bfind');
   btn.disabled = true;
@@ -2299,9 +2372,9 @@ function centreOnUser() {
   if (btn) btn.classList.add('locating');
 
   function applyPos(lat, lng, acc) {
-    // Centre map immediately
-    map.flyTo([lat, lng], 17, { animate: true, duration: 0.6 });
-    // Place/update marker
+    // Zoom to max street level
+    const zoom = _navMode ? 18 : 17;
+    map.flyTo([lat, lng], zoom, { animate: true, duration: 0.5 });
     placeLocationMarker(lat, lng, acc, _navMode ? _lastHeading : null);
     fromCoords = [lat, lng];
     if (btn) btn.classList.remove('locating');
@@ -2793,9 +2866,9 @@ function startNavigation() {
   // Remove start marker — arrow replaces it
   if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
 
-  // Animate: wait for panel collapse, then fly to user at street level
+  // Fly to user at max zoom immediately after panel collapses
   setTimeout(() => {
-    map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
+    map.flyTo([initLat, initLng], 18, { animate: true, duration: 1.0 });
   }, 450);
 
   // ── STEP 2: Refine with accurate GPS fix in background ───────────────
@@ -2841,6 +2914,13 @@ function showNavHud() {
   if (divider) divider.style.display = 'none';
   const locBtn = document.getElementById('nav-locate-btn');
   if (locBtn) { locBtn.classList.add('nav-visible'); locBtn.classList.remove('nav-hidden'); }
+  const compassBtn = document.getElementById('nav-compass-btn');
+  if (compassBtn) {
+    compassBtn.classList.add('nav-visible');
+    compassBtn.classList.remove('nav-hidden');
+    compassBtn.classList.add('active'); // active = follow is on
+  }
+  _navFollowMode = true; // start with follow enabled
 
   // Hide floating SOS circle — HUD has its own button
   const sosCircle = document.getElementById('sos-circle');
@@ -2853,8 +2933,8 @@ function showNavHud() {
   });
   // Map layers now controlled via on-map buttons (no HUD layer toggles)
 
-  updateNavStats(true);  // force initial display immediately
-  // Stats update every GPS tick when user moves — no polling interval needed
+  updateNavStats(true);  // force initial display — uses current curRoutes[selIdx].durSecs
+  // Stats update every GPS tick when user moves, and after every refetch
 
   // HUD is position:fixed — no padding needed on map wrapper.
   setTimeout(() => {
@@ -2865,11 +2945,13 @@ function showNavHud() {
 }
 
 function updateNavLocatePos() {
-  const btn    = document.getElementById('nav-locate-btn');
-  const sheet  = document.getElementById('nav-sheet');
+  const btn        = document.getElementById('nav-locate-btn');
+  const compassBtn = document.getElementById('nav-compass-btn');
+  const sheet      = document.getElementById('nav-sheet');
   if (!btn || !sheet) return;
   const sheetH = sheet.offsetHeight || 145;
-  btn.style.bottom = (sheetH + 10) + 'px';
+  btn.style.bottom        = (sheetH + 10) + 'px';
+  if (compassBtn) compassBtn.style.bottom = (sheetH + 62) + 'px'; // 52px above locate
 }
 
 
@@ -2886,8 +2968,24 @@ function populateNdRoutes() {
       + (i === selIdx ? '<span class="ndr-badge">Active</span>' : '');
     item.onclick = () => {
       selectRoute(i);
+      // During navigation re-hide non-selected, show selected only
+      if (_navMode) {
+        routeLayers.forEach((l, ri) => {
+          if (!l) return;
+          if (ri !== i) { if (map.hasLayer(l)) map.removeLayer(l); }
+          else { if (!map.hasLayer(l)) map.addLayer(l); l.bringToFront(); }
+        });
+        // Repin to current position
+        const layer = routeLayers[i];
+        if (layer && fromCoords) {
+          const ll = layer.getLatLngs();
+          if (ll && ll.length > 1) {
+            layer.setLatLngs([L.latLng(fromCoords[0], fromCoords[1]), ...ll.slice(1)]);
+          }
+        }
+      }
       populateNdRoutes();
-      updateNavStats();
+      updateNavStats(true);
     };
     list.appendChild(item);
   });
@@ -2912,18 +3010,24 @@ function updateNavStats(forceUpdate) {
       : 999;
 
     if (forceUpdate || movedDist >= 10) {
-      const totalDistM   = r.distM   || 1;
+      // Sum remaining route polyline length (accurate, shrinks as route trims)
+      let remainDist = 0;
+      const activeLayer = routeLayers[selIdx];
+      if (activeLayer && map.hasLayer(activeLayer)) {
+        const ll = activeLayer.getLatLngs();
+        for (let i = 0; i < ll.length - 1; i++) {
+          remainDist += getDistance(ll[i].lat, ll[i].lng, ll[i+1].lat, ll[i+1].lng);
+        }
+      }
+      // Fallback to straight-line if polyline not available
+      if (remainDist < 1) {
+        remainDist = getDistance(fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]);
+      }
+
       const totalDurSecs = r.durSecs || 1;
-
-      // Straight-line remaining distance GPS → destination
-      const remainDist = getDistance(
-        fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]
-      );
-
-      // Ratio of journey remaining (1.0 = not started, 0 = arrived)
-      // Clamp to [0,1] to prevent overshoot
+      const totalDistM   = r.distM   || 1;
+      // Scale ORS duration by remaining fraction — consistent with route cards
       const ratio = Math.max(0, Math.min(remainDist / totalDistM, 1));
-
       distM   = remainDist;
       durSecs = totalDurSecs * ratio;
 
@@ -2934,8 +3038,9 @@ function updateNavStats(forceUpdate) {
     } else {
       if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
     }
-  } else if (!_navMode) {
-    // Not navigating yet — show raw ORS values from route card
+  }
+  // Always show ORS values when not yet navigating (matches route cards exactly)
+  if (!_navMode || distM === 0) {
     distM   = r.distM   || 0;
     durSecs = r.durSecs || 0;
   }
@@ -3008,12 +3113,10 @@ function ndSetMode(btn) {
   if (!fromCoords || !toCoords) return;
   showToast('Recalculating…');
   clearTimeout(_modeDebounce);
-  _modeDebounce = setTimeout(() => {
-    findRoutes().then(() => {
-      populateNdRoutes();
-      updateNavStats();
-    }).catch(() => {});
-  }, 400);
+  _modeDebounce = setTimeout(async () => {
+    await refetchRoutes();
+    showToast('✅ Route updated');
+  }, 500);
 }
 
 function ndToggleHeat(btn) {
@@ -3048,6 +3151,8 @@ function exitNavigation() {
   // Hide the nav locate button and remove any lingering map listener
   const locBtn2 = document.getElementById('nav-locate-btn');
   if (locBtn2) { locBtn2.classList.remove('nav-visible'); locBtn2.classList.add('nav-hidden'); }
+  const compassBtn2 = document.getElementById('nav-compass-btn');
+  if (compassBtn2) { compassBtn2.classList.remove('nav-visible'); compassBtn2.classList.add('nav-hidden'); }
   if (map) map.off('click', _onMapClickCloseDrawer);
 
   document.documentElement.style.removeProperty('--peek-h');
@@ -3246,10 +3351,35 @@ function startCompass() {
   }
 }
 
-// Map rotation disabled — use north-up with auto pan instead
-// True rotation requires native app APIs, not available in browser Leaflet
-function rotateMapToHeading(heading) { /* no-op */ }
+// Map rotation disabled — north-up with auto-pan follow
+function rotateMapToHeading(heading) { /* no-op — map stays north-up */ }
 function setNavFollowMode(on) { _navFollowMode = on; }
+
+// Centre on user during navigation (max zoom, re-enable follow)
+function navCentreOnUser() {
+  _navFollowMode = true;
+  const compassBtn = document.getElementById('nav-compass-btn');
+  if (compassBtn) compassBtn.classList.add('active');
+  if (fromCoords) {
+    map.flyTo(fromCoords, 18, { animate: true, duration: 0.6 });
+  } else {
+    centreOnUser();
+  }
+}
+
+// Orient route to top — fits the remaining route in view
+function orientToRoute() {
+  // Compass btn = undo any manual map rotation / re-centre on user north-up
+  // Map stays north-up (no rotation in browser Leaflet) so this just
+  // re-centres on user and re-enables auto-follow
+  _navFollowMode = true;
+  const compassBtn = document.getElementById('nav-compass-btn');
+  if (compassBtn) compassBtn.classList.add('active');
+  if (fromCoords) {
+    map.flyTo(fromCoords, map.getZoom(), { animate: true, duration: 0.5 });
+  }
+  showToast('Following your location');
+}
 
 function stopCompass() {
   if (_compassListener) {
@@ -3447,9 +3577,9 @@ function startLiveTracking() {
       // Update stats — gated internally to only change when moved 10m+
       updateNavStats();
 
-      // Pan map to keep user centred (smooth follow)
+      // Keep arrow centred — smooth pan to user on every GPS tick
       if (_navFollowMode && map) {
-        map.panTo([lat, lng], { animate: true, duration: 0.5, easeLinearity: 1 });
+        map.setView([lat, lng], map.getZoom(), { animate: true, duration: 0.4 });
       }
 
       // Check if user is near any risk zones
