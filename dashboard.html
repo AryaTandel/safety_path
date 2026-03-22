@@ -279,11 +279,7 @@ html,body{
 #mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
 
-/* Map pane rotation — only rotates tiles/routes, not controls/HUD */
-.leaflet-map-pane {
-  transform-origin: center center;
-  will-change: transform;
-}
+
 
 /* Map rotation disabled — CSS rotate breaks Leaflet tap/pan coordinates */
 
@@ -753,35 +749,7 @@ html,body{
 #nav-locate-btn.nav-hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
 #nav-locate-btn:hover { background: var(--teal-glow); border-color: var(--teal); }
 
-/* Compass/orient button — sits above locate button during navigation */
-#nav-compass-btn {
-  position: fixed;
-  right: 1rem;
-  z-index: 810;
-  width: 42px; height: 42px;
-  background: var(--card);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  display: none;
-  align-items: center; justify-content: center;
-  cursor: pointer;
-  color: var(--amber);
-  box-shadow: 0 2px 14px var(--shadow);
-  transition: bottom 0.42s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, transform 0.2s;
-}
-#nav-compass-btn.nav-visible { display: flex; }
-#nav-compass-btn.nav-hidden { opacity: 0; pointer-events: none; }
-#nav-compass-btn:hover { background: rgba(245,158,11,0.12); border-color: var(--amber); }
-#nav-compass-btn.active {
-  background: rgba(245,158,11,0.15);
-  border-color: var(--amber);
-  box-shadow: 0 0 0 3px rgba(245,158,11,0.2), 0 2px 14px var(--shadow);
-}
-/* North indicator needle inside compass */
-#compass-needle {
-  transition: transform 0.3s ease-out;
-  transform-origin: center center;
-}
+
 
 /* ══════ LEAFLET ZOOM — top-left, just below topbar ══════ */
 .leaflet-top.leaflet-left {
@@ -1279,20 +1247,9 @@ html,body{
     <button id="sos-circle" onclick="openSOS()">
       <span>SOS</span>
     </button>
-    <!-- Compass/orient button — tap to re-centre + orient route to top -->
-    <button id="nav-compass-btn" onclick="orientToRoute()" title="Orient route to top">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/>
-        <g id="compass-needle">
-          <polygon points="12,3 14.5,12 12,10 9.5,12" fill="var(--red)" stroke="none"/>
-          <polygon points="12,21 14.5,12 12,14 9.5,12" fill="var(--muted)" stroke="none"/>
-        </g>
-        <circle cx="12" cy="12" r="1.5" fill="var(--fg)"/>
-      </svg>
-    </button>
+
     <!-- Locate button floating above nav sheet during navigation -->
-    <button id="nav-locate-btn" onclick="navCentreOnUser()" title="Centre on my location">
+    <button id="nav-locate-btn" onclick="centreOnUser()" title="Centre on my location">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
@@ -1425,7 +1382,6 @@ async function initApp() {
     tap: true,
 
   }).setView([19.076, 72.8777], 12);
-
 
 
   // Locate button
@@ -2392,11 +2348,7 @@ function centreOnUser() {
     fromCoords = [lat, lng];
     if (btn) btn.classList.remove('locating');
     // Re-enable follow after manual centre
-    if (_navMode) {
-      _navFollowMode = true;
-      const cb = document.getElementById('nav-compass-btn');
-      if (cb) cb.classList.add('active');
-    }
+    if (_navMode) _navFollowMode = true;
   }
 
   // Step 1: use any cached position instantly (feels responsive)
@@ -2937,12 +2889,6 @@ function showNavHud() {
   if (divider) divider.style.display = 'none';
   const locBtn = document.getElementById('nav-locate-btn');
   if (locBtn) { locBtn.classList.add('nav-visible'); locBtn.classList.remove('nav-hidden'); }
-  const compassBtn = document.getElementById('nav-compass-btn');
-  if (compassBtn) {
-    compassBtn.classList.add('nav-visible');
-    compassBtn.classList.remove('nav-hidden');
-    compassBtn.classList.add('active'); // active = follow is on
-  }
   _navFollowMode = true; // start with follow enabled
 
   // Hide floating SOS circle — HUD has its own button
@@ -2968,13 +2914,11 @@ function showNavHud() {
 }
 
 function updateNavLocatePos() {
-  const btn        = document.getElementById('nav-locate-btn');
-  const compassBtn = document.getElementById('nav-compass-btn');
-  const sheet      = document.getElementById('nav-sheet');
+  const btn   = document.getElementById('nav-locate-btn');
+  const sheet = document.getElementById('nav-sheet');
   if (!btn || !sheet) return;
   const sheetH = sheet.offsetHeight || 145;
-  btn.style.bottom        = (sheetH + 10) + 'px';
-  if (compassBtn) compassBtn.style.bottom = (sheetH + 62) + 'px'; // 52px above locate
+  btn.style.bottom = (sheetH + 10) + 'px';
 }
 
 
@@ -3185,8 +3129,7 @@ function exitNavigation() {
   // Hide the nav locate button and remove any lingering map listener
   const locBtn2 = document.getElementById('nav-locate-btn');
   if (locBtn2) { locBtn2.classList.remove('nav-visible'); locBtn2.classList.add('nav-hidden'); }
-  const compassBtn2 = document.getElementById('nav-compass-btn');
-  if (compassBtn2) { compassBtn2.classList.remove('nav-visible'); compassBtn2.classList.add('nav-hidden'); }
+
   if (map) map.off('click', _onMapClickCloseDrawer);
 
   document.documentElement.style.removeProperty('--peek-h');
@@ -3303,155 +3246,16 @@ let traversedCoords = [];
 let traversedLayer  = null;
 let _lastHeading        = null;   // last known heading in degrees
 let _liveSpeedMps       = null;   // actual GPS speed in m/s (updated each tick)
-let _mapRotation        = 0;      // current map rotation in degrees
-let _navFollowMode      = false;  // true = map rotates to follow user
+let _navFollowMode      = false;  // true = map pans to follow user
 let _offRouteCount      = 0;      // consecutive GPS ticks off-route
 let _isRecalculating    = false;  // prevent multiple recalc calls
 let _rerouteDebounce    = null;   // debounce timer for rerouting
 const OFF_ROUTE_METRES  = 80;     // metres from route before warning/rerouting
 const OFF_ROUTE_TICKS   = 3;      // consecutive ticks off-route before rerouting
 let _navMode            = false;  // true when actively navigating
-let _compassHeading     = null;   // from device compass (more accurate than GPS heading)
-let _compassListener    = null;   // reference to remove listener on exit
 
-// ── Device compass — fires whenever phone rotates ─────────────────────────
-function startCompass() {
-  if (!window.DeviceOrientationEvent) return;
 
-  let _lastCompassUpdate = 0;
 
-  function handleOrientation(e) {
-    let heading = null;
-
-    // iOS — webkitCompassHeading is 0=North clockwise, most accurate
-    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
-      heading = e.webkitCompassHeading;
-    } else if (e.absolute && e.alpha !== null) {
-      // Android absolute — convert counter-clockwise to clockwise from North
-      heading = (360 - e.alpha) % 360;
-    } else if (e.alpha !== null) {
-      // Android non-absolute fallback
-      heading = (360 - e.alpha) % 360;
-    }
-
-    if (heading === null) return;
-
-    _compassHeading = heading;
-    _lastHeading    = heading;
-
-    if (!_navMode) return;
-
-    // Rotate map so user's direction faces up
-    rotateMapToHeading(heading);
-
-    // Throttle DOM updates to max 30fps — compass fires 50-60 times/sec
-    const now = Date.now();
-    if (now - _lastCompassUpdate < 33) return;
-    _lastCompassUpdate = now;
-
-    // ── Fast path: just rotate the existing arrow element via CSS ──────
-    // Avoids destroying/recreating the Leaflet marker every tick.
-    const arrowEl = document.querySelector('.nav-arrow');
-    if (arrowEl) {
-      arrowEl.style.transform = 'rotate(' + heading + 'deg)';
-      return; // done — no need to recreate marker
-    }
-
-    // ── Slow path: marker doesn't exist yet, create it ──────────────────
-    if (locMarker) {
-      const ll = locMarker.getLatLng();
-      placeLocationMarker(ll.lat, ll.lng, 20, heading);
-    } else if (fromCoords) {
-      placeLocationMarker(fromCoords[0], fromCoords[1], 20, heading);
-    }
-  }
-
-  // iOS 13+ requires permission
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission()
-      .then(perm => {
-        if (perm === 'granted') {
-          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-          window.addEventListener('deviceorientation', handleOrientation, true);
-          _compassListener = handleOrientation;
-        }
-      })
-      .catch(() => {});
-  } else {
-    // Android — no permission needed
-    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-    window.addEventListener('deviceorientation', handleOrientation, true);
-    _compassListener = handleOrientation;
-  }
-}
-
-// Map rotation disabled — north-up with auto-pan follow
-function rotateMapToHeading(heading) {
-  if (!_navFollowMode || heading === null || !map) return;
-  const pane = document.querySelector('.leaflet-map-pane');
-  if (!pane) return;
-  // Rotate only the map pane (tiles + routes) — instant CSS, no re-render
-  pane.style.transform = 'rotate(' + heading + 'deg)';
-  // Counter-rotate markers so they stay upright
-  const markerPane = document.querySelector('.leaflet-marker-pane');
-  const overlayPane = document.querySelector('.leaflet-overlay-pane');
-  if (markerPane) markerPane.style.transform = 'rotate(' + (-heading) + 'deg)';
-  if (overlayPane) overlayPane.style.transform = 'rotate(' + (-heading) + 'deg)';
-}
-
-function setNavFollowMode(on) {
-  _navFollowMode = on;
-  if (!on) {
-    // Reset rotation when follow disabled
-    const pane = document.querySelector('.leaflet-map-pane');
-    const markerPane = document.querySelector('.leaflet-marker-pane');
-    const overlayPane = document.querySelector('.leaflet-overlay-pane');
-    if (pane) pane.style.transform = '';
-    if (markerPane) markerPane.style.transform = '';
-    if (overlayPane) overlayPane.style.transform = '';
-    return;
-  }
-  if (_lastHeading !== null) rotateMapToHeading(_lastHeading);
-}
-
-// Centre on user during navigation (max zoom, re-enable follow)
-function navCentreOnUser() {
-  _navFollowMode = true;
-  const compassBtn = document.getElementById('nav-compass-btn');
-  if (compassBtn) compassBtn.classList.add('active');
-  if (fromCoords) {
-    map.flyTo(fromCoords, NAV_ZOOM, { animate: true, duration: 0.6 });
-  } else {
-    centreOnUser();
-  }
-}
-
-// Orient route to top — fits the remaining route in view
-function orientToRoute() {
-  // Reset bearing to north-up + re-centre on user + re-enable follow
-  _navFollowMode = true;
-  // Reset rotation to north-up
-  const pane = document.querySelector('.leaflet-map-pane');
-  const mp   = document.querySelector('.leaflet-marker-pane');
-  const op   = document.querySelector('.leaflet-overlay-pane');
-  if (pane) pane.style.transform = '';
-  if (mp)   mp.style.transform   = '';
-  if (op)   op.style.transform   = '';
-  const compassBtn = document.getElementById('nav-compass-btn');
-  if (compassBtn) compassBtn.classList.add('active');
-  if (fromCoords) {
-    map.flyTo(fromCoords, NAV_ZOOM, { animate: true, duration: 0.6 });
-  }
-}
-
-function stopCompass() {
-  if (_compassListener) {
-    window.removeEventListener('deviceorientationabsolute', _compassListener, true);
-    window.removeEventListener('deviceorientation',         _compassListener, true);
-    _compassListener = null;
-  }
-  _compassHeading = null;
-}
 
 function startLiveTracking() {
   if (liveWatchId !== null) return; // already watching
@@ -3472,7 +3276,6 @@ function startLiveTracking() {
   _isRecalculating  = false;
   _navMode = true;
   setNavFollowMode(true);
-  startCompass();
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
 
   liveWatchId = navigator.geolocation.watchPosition(
@@ -3481,13 +3284,9 @@ function startLiveTracking() {
       // Track actual speed — GPS speed is in m/s, only use if valid
       if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
 
-      // Heading priority: 1) device compass, 2) GPS heading, 3) computed from movement
+      // Heading: 1) GPS heading, 2) computed from movement
       let heading = null;
-      if (_compassHeading !== null) {
-        // Most accurate — phone compass knows exact direction phone faces
-        heading = _compassHeading;
-        _lastHeading = heading;
-      } else if (rawHeading !== null && rawHeading >= 0) {
+      if (rawHeading !== null && rawHeading >= 0) {
         heading = rawHeading;
         _lastHeading = heading;
       } else if (traversedCoords.length >= 1) {
@@ -3679,8 +3478,7 @@ function stopLiveTracking() {
   trackingOn = false;
   _navMode = false;
   _liveSpeedMps = null;
-  setNavFollowMode(false);
-  stopCompass();
+  _navFollowMode = false;
   // Switch back to pulsing dot
   if (locMarker && fromCoords) {
     placeLocationMarker(fromCoords[0], fromCoords[1], 20, null);
