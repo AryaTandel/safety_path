@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -272,17 +273,7 @@ html,body{
 #mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
 
-/* Map rotation during navigation */
-#map.nav-rotating {
-  transition: transform 0.4s ease-out;
-  transform-origin: center center;
-}
-/* Counter-rotate ALL Leaflet controls so they stay upright */
-#map.nav-rotating .leaflet-control-container,
-#map.nav-rotating .leaflet-control-container * {
-  transform: rotate(var(--map-counter-rotate, 0deg));
-  transition: transform 0.4s ease-out;
-}
+/* Map rotation disabled — CSS rotate breaks Leaflet tap/pan coordinates */
 
 /* ══════ LEAFLET OVERRIDES ══════ */
 .leaflet-control-attribution{background:rgba(8,15,18,0.75)!important;color:var(--muted)!important;font-size:10px!important}
@@ -1320,6 +1311,7 @@ html,body{
      SCRIPTS
 ══════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
@@ -1388,7 +1380,9 @@ async function initApp() {
     touchZoom: true,
     doubleClickZoom: true,
     boxZoom: false,
-    tap: true
+    tap: true,
+    rotate: true,          // leaflet-rotate plugin
+    bearing: 0             // start north-up
   }).setView([19.076, 72.8777], 12);
 
 
@@ -2929,37 +2923,33 @@ function updateNavStats(forceUpdate) {
   let durSecs = r.durSecs || 0;
 
   if (_navMode && fromCoords && toCoords) {
-    // Only recalculate distance if user moved more than 10m
-    // This prevents zoom/pan/jitter from changing the displayed value
+    // Only recalculate when user moves 10m+ — prevents zoom/jitter flicker
     const movedDist = (_statsLastLat !== null)
       ? getDistance(fromCoords[0], fromCoords[1], _statsLastLat, _statsLastLng)
       : 999;
 
     if (forceUpdate || movedDist >= 10) {
-      // Straight-line distance to destination
+      // Total original distance from ORS
+      const totalDistM   = r.distM   || 1;
+      const totalDurSecs = r.durSecs || 1;
+
+      // Remaining straight-line distance to destination
       const remainDist = getDistance(
         fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]
       );
-      // Use straight-line — don't sum polyline (it changes with trimming/jitter)
-      distM = remainDist;
 
-      // Default speed by mode
-      const defaultSpeed = travelMode === 'driving-car'     ? 11.1
-                         : travelMode === 'cycling-regular' ?  4.2
-                         :                                     1.4;
-      // Use GPS speed only when actually moving (> 0.5 m/s = ~2 km/h)
-      const speedMps = (_liveSpeedMps !== null && _liveSpeedMps > 0.5)
-                     ? _liveSpeedMps
-                     : defaultSpeed;
-      durSecs = distM / speedMps;
+      // Scale ORS duration proportionally to remaining distance
+      // This keeps HUD consistent with the route cards (both from ORS)
+      const ratio  = Math.min(remainDist / totalDistM, 1);
+      distM   = remainDist;
+      durSecs = totalDurSecs * ratio;
 
-      // Cache values and position
-      _statsDistM    = distM;
-      _statsDurSecs  = durSecs;
-      _statsLastLat  = fromCoords[0];
-      _statsLastLng  = fromCoords[1];
+      // Cache
+      _statsDistM   = distM;
+      _statsDurSecs = durSecs;
+      _statsLastLat = fromCoords[0];
+      _statsLastLng = fromCoords[1];
     } else {
-      // User hasn't moved — use cached values, don't flicker
       if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
     }
   }
@@ -3226,7 +3216,7 @@ function startCompass() {
 
     if (!_navMode) return;
 
-    // Rotate map to keep user's direction facing up
+    // Rotate map so user's direction faces up
     rotateMapToHeading(heading);
 
     // Throttle DOM updates to max 30fps — compass fires 50-60 times/sec
@@ -3270,32 +3260,21 @@ function startCompass() {
   }
 }
 
-// Rotate map so user's direction is always "up"
+// Rotate map using leaflet-rotate plugin so road is always ahead of user
 function rotateMapToHeading(heading) {
-  if (!_navFollowMode || heading === null) return;
-  // Map rotates opposite to heading so route ahead is at top
-  const rotation = -heading;
-  _mapRotation = rotation;
-  const mapEl = document.getElementById('map');
-  if (mapEl) {
-    mapEl.style.transform = 'rotate(' + rotation + 'deg)';
-    // Set CSS variable so controls counter-rotate back to upright
-    mapEl.style.setProperty('--map-counter-rotate', heading + 'deg');
-  }
+  if (!_navFollowMode || heading === null || !map) return;
+  try {
+    // setBearing rotates the map so heading faces up — no CSS glitches
+    if (typeof map.setBearing === 'function') {
+      map.setBearing(heading);
+    }
+  } catch(e) {}
 }
 
-// Toggle map follow mode (called when nav starts/stops)
 function setNavFollowMode(on) {
   _navFollowMode = on;
-  const mapEl = document.getElementById('map');
-  if (!on) {
-    _mapRotation = 0;
-    if (mapEl) {
-      mapEl.style.transform = '';
-      mapEl.classList.remove('nav-rotating');
-    }
-  } else {
-    if (mapEl) mapEl.classList.add('nav-rotating');
+  if (!on && map && typeof map.setBearing === 'function') {
+    try { map.setBearing(0); } catch(e) {} // reset to north-up on exit
   }
 }
 
