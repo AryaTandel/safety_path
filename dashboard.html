@@ -534,6 +534,24 @@ html,body{
 .loc-ring2{animation-delay:0.75s!important}
 @keyframes locP{0%{transform:translate(-50%,-50%) scale(0.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}}
 
+/* Directional arrow — shown during navigation */
+.nav-arrow-wrap{position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center}
+.nav-arrow{
+  width:0;height:0;
+  border-left:9px solid transparent;border-right:9px solid transparent;
+  border-bottom:26px solid #2dd4bf;
+  filter:drop-shadow(0 2px 6px rgba(45,212,191,0.7));
+  position:relative;z-index:2;
+  transition:transform 0.15s ease-out;
+  transform-origin:center center;
+}
+.nav-arrow-ring{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(45,212,191,0.12);border:2px solid rgba(45,212,191,0.35);
+  position:absolute;top:0;left:0;
+  animation:locP 2s ease-out infinite;
+}
+
 /* Navigation arrow marker */
 
 
@@ -2397,18 +2415,31 @@ function centreOnUser() {
   );
 }
 
-function placeLocationMarker(lat, lng, accuracy) {
+function placeLocationMarker(lat, lng, accuracy, heading) {
   if (locMarker) { map.removeLayer(locMarker); locMarker=null; }
   if (locAccCircle) { map.removeLayer(locAccCircle); locAccCircle=null; }
   locAccCircle=L.circle([lat,lng],{
     radius:Math.min(accuracy,200),
     color:'#2dd4bf',weight:1,fillColor:'#2dd4bf',fillOpacity:0.06
   }).addTo(map);
-  const icon=L.divIcon({
-    className:'',
-    html:'<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>',
-    iconSize:[20,20], iconAnchor:[10,10], popupAnchor:[0,-12]
-  });
+
+  let iconHtml, iconSize, iconAnchor;
+  if (_navMode && heading !== null && heading !== undefined) {
+    // Navigation — directional arrow pointing in compass direction
+    iconHtml = '<div class="nav-arrow-wrap">'
+      + '<div class="nav-arrow-ring"></div>'
+      + '<div class="nav-arrow" style="transform:rotate('+heading+'deg)"></div>'
+      + '</div>';
+    iconSize   = [36, 36];
+    iconAnchor = [18, 18];
+  } else {
+    // Default — pulsing dot
+    iconHtml   = '<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>';
+    iconSize   = [20, 20];
+    iconAnchor = [10, 10];
+  }
+
+  const icon = L.divIcon({ className:'', html:iconHtml, iconSize, iconAnchor, popupAnchor:[0,-12] });
   locMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
     .bindPopup('<div style="font-family:Nunito,sans-serif;text-align:center;padding:0.2rem 0.4rem">'
       +'<div style="font-weight:700;font-size:0.86rem">Current Location</div>'
@@ -2831,8 +2862,8 @@ function startNavigation() {
   const initLat = fromCoords ? fromCoords[0] : 19.076;
   const initLng = fromCoords ? fromCoords[1] : 72.877;
 
-  // Show arrow at known position immediately
-  placeLocationMarker(initLat, initLng, 30);
+  // Show arrow at known position immediately (heading null until compass fires)
+  placeLocationMarker(initLat, initLng, 30, null);
 
   // Hide non-selected routes immediately
   if (routeLayers && routeLayers.length) {
@@ -2869,7 +2900,7 @@ function startNavigation() {
         const lng = pos.coords.longitude;
         const acc = pos.coords.accuracy;
         fromCoords = [lat, lng];
-        placeLocationMarker(lat, lng, acc);
+        placeLocationMarker(lat, lng, acc, _compassHeading);
         // Ensure zoom is at street level after GPS refine
         if (map.getZoom() < 16) {
           map.setView([lat, lng], NAV_ZOOM, { animate: true });
@@ -3282,9 +3313,72 @@ let _rerouteDebounce    = null;   // debounce timer for rerouting
 const OFF_ROUTE_METRES  = 80;     // metres from route before warning/rerouting
 const OFF_ROUTE_TICKS   = 3;      // consecutive ticks off-route before rerouting
 let _navMode            = false;  // true when actively navigating
+let _lastHeading        = null;   // last known compass heading in degrees
+let _compassHeading     = null;   // heading from DeviceOrientation API
+let _compassListener    = null;   // stored so we can remove it later
 
 
 
+
+function startCompass() {
+  if (!window.DeviceOrientationEvent) return;
+  let _lastUpdate = 0;
+
+  function handleOrientation(e) {
+    let heading = null;
+    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+      heading = e.webkitCompassHeading;                    // iOS — most accurate
+    } else if (e.absolute && e.alpha !== null) {
+      heading = (360 - e.alpha) % 360;                    // Android absolute
+    } else if (e.alpha !== null) {
+      heading = (360 - e.alpha) % 360;                    // Android fallback
+    }
+    if (heading === null) return;
+    _compassHeading = heading;
+    _lastHeading    = heading;
+    if (!_navMode) return;
+
+    // Throttle to 30fps max
+    const now = Date.now();
+    if (now - _lastUpdate < 33) return;
+    _lastUpdate = now;
+
+    // Fast path — just rotate the existing arrow element via CSS
+    const arrowEl = document.querySelector('.nav-arrow');
+    if (arrowEl) {
+      arrowEl.style.transform = 'rotate(' + heading + 'deg)';
+    } else if (locMarker) {
+      // Slow path — recreate marker if arrow not yet rendered
+      const ll = locMarker.getLatLng();
+      placeLocationMarker(ll.lat, ll.lng, 20, heading);
+    }
+  }
+
+  // iOS 13+ requires explicit permission
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(p => {
+        if (p === 'granted') {
+          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+          window.addEventListener('deviceorientation',         handleOrientation, true);
+          _compassListener = handleOrientation;
+        }
+      }).catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation',         handleOrientation, true);
+    _compassListener = handleOrientation;
+  }
+}
+
+function stopCompass() {
+  if (_compassListener) {
+    window.removeEventListener('deviceorientationabsolute', _compassListener, true);
+    window.removeEventListener('deviceorientation',         _compassListener, true);
+    _compassListener = null;
+  }
+  _compassHeading = null;
+}
 
 function startLiveTracking() {
   if (liveWatchId !== null) return; // already watching
@@ -3296,6 +3390,8 @@ function startLiveTracking() {
 
   // Reset traversed path and stats cache for new journey
   traversedCoords = [];
+  _lastHeading      = null;
+  _compassHeading   = null;
   _statsLastLat     = null;
   _statsLastLng     = null;
   _statsDistM       = null;
@@ -3304,6 +3400,7 @@ function startLiveTracking() {
   _isRecalculating  = false;
   _navMode = true;
   _navFollowMode = true;
+  startCompass();
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
 
   liveWatchId = navigator.geolocation.watchPosition(
@@ -3312,8 +3409,8 @@ function startLiveTracking() {
       // Track actual speed — GPS speed is in m/s, only use if valid
       if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
 
-      // Move location marker
-      placeLocationMarker(lat, lng, acc);
+      // Move location marker — use compass heading for arrow direction
+      placeLocationMarker(lat, lng, acc, _compassHeading !== null ? _compassHeading : _lastHeading);
 
       // Update fromCoords
       fromCoords = [lat, lng];
@@ -3516,6 +3613,8 @@ function stopLiveTracking() {
   _navMode = false;
   _liveSpeedMps = null;
   _navFollowMode = false;
+  stopCompass();
+  _lastHeading = null;
   // Switch back to pulsing dot
   if (locMarker && fromCoords) {
     placeLocationMarker(fromCoords[0], fromCoords[1], 20);
