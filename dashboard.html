@@ -272,6 +272,18 @@ html,body{
 #mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
 
+/* Map rotation during navigation */
+#map.nav-rotating {
+  transition: transform 0.4s ease-out;
+  transform-origin: center center;
+}
+/* Counter-rotate ALL Leaflet controls so they stay upright */
+#map.nav-rotating .leaflet-control-container,
+#map.nav-rotating .leaflet-control-container * {
+  transform: rotate(var(--map-counter-rotate, 0deg));
+  transition: transform 0.4s ease-out;
+}
+
 /* ══════ LEAFLET OVERRIDES ══════ */
 .leaflet-control-attribution{background:rgba(8,15,18,0.75)!important;color:var(--muted)!important;font-size:10px!important}
 .leaflet-control-attribution a{color:var(--teal)!important}
@@ -2779,8 +2791,9 @@ function startNavigation() {
       } else {
         const ll = layer.getLatLngs();
         if (ll && ll.length > 1) {
-          ll[0] = L.latLng(initLat, initLng);
-          layer.setLatLngs(ll);
+          // Build new array with pinned start point
+          const newLl = [L.latLng(initLat, initLng), ...ll.slice(1)];
+          layer.setLatLngs(newLl);
           layer.setStyle({ opacity: 0.9, weight: 6 });
         }
       }
@@ -2821,7 +2834,10 @@ function startNavigation() {
         const layer = routeLayers[selIdx];
         if (layer && map.hasLayer(layer)) {
           const ll = layer.getLatLngs();
-          if (ll && ll.length > 1) { ll[0] = L.latLng(lat, lng); layer.setLatLngs(ll); }
+          if (ll && ll.length > 1) {
+            const newLl = [L.latLng(lat, lng), ...ll.slice(1)];
+            layer.setLatLngs(newLl);
+          }
         }
       },
       () => {},
@@ -2859,8 +2875,8 @@ function showNavHud() {
   });
   // Map layers now controlled via on-map buttons (no HUD layer toggles)
 
-  updateNavStats();
-  // Stats now update every GPS tick — no polling interval needed
+  updateNavStats(true);  // force initial display immediately
+  // Stats update every GPS tick when user moves — no polling interval needed
 
   // HUD is position:fixed — no padding needed on map wrapper.
   setTimeout(() => {
@@ -2899,40 +2915,53 @@ function populateNdRoutes() {
   });
 }
 
-function updateNavStats() {
+// Cache last stats position so we only update when user actually moves
+let _statsLastLat  = null;
+let _statsLastLng  = null;
+let _statsDistM    = null;   // last calculated remaining distance
+let _statsDurSecs  = null;   // last calculated remaining duration
+
+function updateNavStats(forceUpdate) {
   if (!curRoutes.length || selIdx >= curRoutes.length) return;
   const r = curRoutes[selIdx];
 
-  // ── Live calculation from current GPS position to destination ─────────
-  // If user is navigating, recalculate remaining distance + time from
-  // their actual position rather than using the original route distance.
-  let distM   = r.distM || 0;
+  let distM   = r.distM   || 0;
   let durSecs = r.durSecs || 0;
 
   if (_navMode && fromCoords && toCoords) {
-    // Remaining straight-line distance GPS → destination
-    const remainDist = getDistance(fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]);
+    // Only recalculate distance if user moved more than 10m
+    // This prevents zoom/pan/jitter from changing the displayed value
+    const movedDist = (_statsLastLat !== null)
+      ? getDistance(fromCoords[0], fromCoords[1], _statsLastLat, _statsLastLng)
+      : 999;
 
-    // Also add up remaining route polyline distance if route layer exists
-    let routeDist = 0;
-    const activeLayer = routeLayers[selIdx];
-    if (activeLayer && map.hasLayer(activeLayer)) {
-      const ll = activeLayer.getLatLngs();
-      for (let i = 0; i < ll.length - 1; i++) {
-        routeDist += getDistance(ll[i].lat, ll[i].lng, ll[i+1].lat, ll[i+1].lng);
-      }
+    if (forceUpdate || movedDist >= 10) {
+      // Straight-line distance to destination
+      const remainDist = getDistance(
+        fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]
+      );
+      // Use straight-line — don't sum polyline (it changes with trimming/jitter)
+      distM = remainDist;
+
+      // Default speed by mode
+      const defaultSpeed = travelMode === 'driving-car'     ? 11.1
+                         : travelMode === 'cycling-regular' ?  4.2
+                         :                                     1.4;
+      // Use GPS speed only when actually moving (> 0.5 m/s = ~2 km/h)
+      const speedMps = (_liveSpeedMps !== null && _liveSpeedMps > 0.5)
+                     ? _liveSpeedMps
+                     : defaultSpeed;
+      durSecs = distM / speedMps;
+
+      // Cache values and position
+      _statsDistM    = distM;
+      _statsDurSecs  = durSecs;
+      _statsLastLat  = fromCoords[0];
+      _statsLastLng  = fromCoords[1];
+    } else {
+      // User hasn't moved — use cached values, don't flicker
+      if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
     }
-    // Use route distance if available (more accurate), else straight-line
-    distM = routeDist > 10 ? routeDist : remainDist;
-
-    // Use actual GPS speed if available, otherwise fall back to mode average
-    const defaultSpeed = travelMode === 'driving-car'     ? 11.1  // 40 km/h
-                       : travelMode === 'cycling-regular' ?  4.2  // 15 km/h
-                       :                                     1.4; // 5 km/h
-    const speedMps = (_liveSpeedMps !== null && _liveSpeedMps > 0.3)
-                   ? _liveSpeedMps   // real measured speed from phone GPS
-                   : defaultSpeed;   // fallback when standing still
-    durSecs = distM / speedMps;
   }
 
   // Format distance
@@ -2951,7 +2980,7 @@ function updateNavStats() {
   const etaStr = eta.getHours().toString().padStart(2,'0') + ':'
                + eta.getMinutes().toString().padStart(2,'0');
 
-  // Update HUD
+  // Update HUD elements
   const distEl = document.getElementById('nstat-dist');
   if (distEl) distEl.textContent = distStr;
   const timeEl = document.getElementById('nstat-time-val');
@@ -3159,6 +3188,16 @@ let traversedCoords = [];
 let traversedLayer  = null;
 let _lastHeading        = null;   // last known heading in degrees
 let _liveSpeedMps       = null;   // actual GPS speed in m/s (updated each tick)
+let _mapRotation        = 0;      // current map rotation in degrees
+let _navFollowMode      = false;  // true = map rotates to follow user
+let _offRouteCount      = 0;      // consecutive GPS ticks off-route
+let _isRecalculating    = false;  // prevent multiple recalc calls
+const OFF_ROUTE_METRES  = 80;     // distance from route to trigger warning
+const OFF_ROUTE_TICKS   = 3;      // consecutive ticks before recalculating
+let _offRouteCount      = 0;      // consecutive GPS ticks off-route
+let _rerouteDebounce    = null;   // debounce timer for rerouting
+const OFF_ROUTE_METRES  = 80;     // metres before considered off-route
+const OFF_ROUTE_TICKS   = 3;      // consecutive ticks before rerouting
 let _navMode            = false;  // true when actively navigating
 let _compassHeading     = null;   // from device compass (more accurate than GPS heading)
 let _compassListener    = null;   // reference to remove listener on exit
@@ -3189,6 +3228,9 @@ function startCompass() {
     _lastHeading    = heading;
 
     if (!_navMode) return;
+
+    // Rotate map to keep user's direction facing up
+    rotateMapToHeading(heading);
 
     // Throttle DOM updates to max 30fps — compass fires 50-60 times/sec
     const now = Date.now();
@@ -3231,6 +3273,35 @@ function startCompass() {
   }
 }
 
+// Rotate map so user's direction is always "up"
+function rotateMapToHeading(heading) {
+  if (!_navFollowMode || heading === null) return;
+  // Map rotates opposite to heading so route ahead is at top
+  const rotation = -heading;
+  _mapRotation = rotation;
+  const mapEl = document.getElementById('map');
+  if (mapEl) {
+    mapEl.style.transform = 'rotate(' + rotation + 'deg)';
+    // Set CSS variable so controls counter-rotate back to upright
+    mapEl.style.setProperty('--map-counter-rotate', heading + 'deg');
+  }
+}
+
+// Toggle map follow mode (called when nav starts/stops)
+function setNavFollowMode(on) {
+  _navFollowMode = on;
+  const mapEl = document.getElementById('map');
+  if (!on) {
+    _mapRotation = 0;
+    if (mapEl) {
+      mapEl.style.transform = '';
+      mapEl.classList.remove('nav-rotating');
+    }
+  } else {
+    if (mapEl) mapEl.classList.add('nav-rotating');
+  }
+}
+
 function stopCompass() {
   if (_compassListener) {
     window.removeEventListener('deviceorientationabsolute', _compassListener, true);
@@ -3248,10 +3319,17 @@ function startLiveTracking() {
     return;
   }
 
-  // Reset traversed path for new journey
+  // Reset traversed path and stats cache for new journey
   traversedCoords = [];
-  _lastHeading = null;
+  _lastHeading      = null;
+  _statsLastLat     = null;
+  _statsLastLng     = null;
+  _statsDistM       = null;
+  _statsDurSecs     = null;
+  _offRouteCount    = 0;
+  _isRecalculating  = false;
   _navMode = true;
+  setNavFollowMode(true);
   startCompass();
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
 
@@ -3294,13 +3372,11 @@ function startLiveTracking() {
       fromCoords = [lat, lng];
       traversedCoords.push([lat, lng]);
 
-      // ── Trim route: only remove points BEHIND the user ─────────────────
-      // We find the closest point on the route, then verify it is actually
-      // behind the user (dot product of heading vs route direction < 0).
+      // ── Route tracking: trim passed points + detect off-route ──────────
       if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
         const routeLatLngs = routeLayers[selIdx].getLatLngs();
         if (routeLatLngs.length > 1) {
-          // Find closest route point
+          // Find closest point on route to user
           let closestIdx = 0;
           let minDist = Infinity;
           for (let i = 0; i < routeLatLngs.length; i++) {
@@ -3308,34 +3384,118 @@ function startLiveTracking() {
             if (d < minDist) { minDist = d; closestIdx = i; }
           }
 
-          if (minDist < 80 && closestIdx > 0) {
-            // Check: is this point really behind us?
-            // Compare bearing from user to the closest point vs user's heading.
-            // If the angle diff > 90° it's ahead (don't trim), if < 90° it's behind (trim).
-            let isBehind = true;
-            if (heading !== null && closestIdx < routeLatLngs.length - 1) {
-              const nextPt = routeLatLngs[closestIdx + 1];
-              const dLng2 = (nextPt.lng - lat) * Math.PI / 180;
-              const lat1b = lat * Math.PI / 180;
-              const lat2b = nextPt.lat * Math.PI / 180;
-              const yb = Math.sin(dLng2) * Math.cos(lat2b);
-              const xb = Math.cos(lat1b) * Math.sin(lat2b) - Math.sin(lat1b) * Math.cos(lat2b) * Math.cos(dLng2);
-              const bearingToNext = (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
-              const angleDiff = Math.abs(((heading - bearingToNext) + 180) % 360 - 180);
-              isBehind = angleDiff < 100; // within 100° means we've passed it
+          // ── OFF-ROUTE DETECTION ───────────────────────────────────────────
+          if (minDist > OFF_ROUTE_METRES) {
+            _offRouteCount++;
+            if (_offRouteCount === 1) {
+              // First tick off — warn immediately
+              showToast('⚠️ You are off route — recalculating…');
+              if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
             }
+            if (_offRouteCount >= OFF_ROUTE_TICKS) {
+              // Consistently off route — recalculate from current position
+              _offRouteCount = 0;
+              clearTimeout(_rerouteDebounce);
+              _rerouteDebounce = setTimeout(() => {
+                if (!_navMode || !toCoords) return;
+                showToast('🔄 Recalculating safest route…');
+                // Temporarily disable nav mode so findRoutes works
+                _navMode = false;
+                findRoutes().then(() => {
+                  _navMode = true;
+                  // Re-hide non-selected routes
+                  routeLayers.forEach((l, i) => {
+                    if (l && i !== selIdx) map.removeLayer(l);
+                  });
+                  populateNdRoutes();
+                  updateNavStats(true);
+                  showToast('✅ New safest route found');
+                }).catch(() => {
+                  _navMode = true;
+                  showToast('Could not recalculate — check connection');
+                });
+              }, 2000);
+            }
+          } else {
+            // Back on route — reset counter
+            _offRouteCount = 0;
+            clearTimeout(_rerouteDebounce);
 
-            if (isBehind) {
-              const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
-              routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
-              routeLayers[selIdx].setStyle({ color: CLR[selIdx]||'#2dd4bf', weight:6, opacity:0.9 });
-              routeLayers[selIdx].bringToFront();
+            // ── TRIM passed points ──────────────────────────────────────────
+            if (minDist < 80 && closestIdx > 0) {
+              let isBehind = true;
+              if (heading !== null && closestIdx < routeLatLngs.length - 1) {
+                const nextPt = routeLatLngs[closestIdx + 1];
+                const dLng2 = (nextPt.lng - lat) * Math.PI / 180;
+                const lat1b = lat * Math.PI / 180;
+                const lat2b = nextPt.lat * Math.PI / 180;
+                const yb = Math.sin(dLng2) * Math.cos(lat2b);
+                const xb = Math.cos(lat1b) * Math.sin(lat2b)
+                         - Math.sin(lat1b) * Math.cos(lat2b) * Math.cos(dLng2);
+                const bearingToNext = (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
+                const angleDiff = Math.abs(((heading - bearingToNext) + 180) % 360 - 180);
+                isBehind = angleDiff < 100;
+              }
+              if (isBehind) {
+                const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+                routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
+                routeLayers[selIdx].setStyle({ color: CLR[selIdx]||'#2dd4bf', weight:6, opacity:0.9 });
+                routeLayers[selIdx].bringToFront();
+              }
             }
           }
         }
       }
 
+      // ── Off-route detection ───────────────────────────────────────────
+      // If user is far from the selected route, warn and auto-recalculate
+      if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
+        const routeLL2 = routeLayers[selIdx].getLatLngs();
+        let nearestDist = Infinity;
+        for (let i = 0; i < routeLL2.length; i++) {
+          const d = getDistance(lat, lng, routeLL2[i].lat, routeLL2[i].lng);
+          if (d < nearestDist) nearestDist = d;
+          if (nearestDist < OFF_ROUTE_METRES) break; // close enough, stop early
+        }
+
+        if (nearestDist > OFF_ROUTE_METRES) {
+          _offRouteCount++;
+          if (_offRouteCount === 2) {
+            // First warning — gentle nudge
+            showToast('⚠️ You seem to be off route');
+            if (navigator.vibrate) navigator.vibrate(200);
+          }
+          if (_offRouteCount >= OFF_ROUTE_TICKS && !_isRecalculating) {
+            // User is consistently off-route — recalculate from current position
+            _isRecalculating = true;
+            _offRouteCount = 0;
+            showToast('Recalculating safest route…');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            // Update origin to current position and find new route
+            fromCoords = [lat, lng];
+            findRoutes().then(() => {
+              _isRecalculating = false;
+              // Restore single-route nav mode after recalc
+              if (routeLayers && routeLayers.length) {
+                routeLayers.forEach((layer, i) => {
+                  if (!layer) return;
+                  if (i !== selIdx) { if (map.hasLayer(layer)) map.removeLayer(layer); }
+                  else { layer.setStyle({ opacity:0.9, weight:6 }); }
+                });
+              }
+              populateNdRoutes();
+              updateNavStats(true);
+              showToast('Route updated ✅');
+            }).catch(() => { _isRecalculating = false; });
+          }
+        } else {
+          // Back on route — reset counter
+          _offRouteCount = 0;
+        }
+      }
+
       // Update HUD stats live every GPS tick
+      // Update stats — gated internally to only change when moved 10m+
       updateNavStats();
 
       // Check if user is near any risk zones
@@ -3372,6 +3532,7 @@ function stopLiveTracking() {
   trackingOn = false;
   _navMode = false;
   _liveSpeedMps = null;
+  setNavFollowMode(false);
   stopCompass();
   // Switch back to pulsing dot
   if (locMarker && fromCoords) {
