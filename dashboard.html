@@ -3192,12 +3192,9 @@ let _mapRotation        = 0;      // current map rotation in degrees
 let _navFollowMode      = false;  // true = map rotates to follow user
 let _offRouteCount      = 0;      // consecutive GPS ticks off-route
 let _isRecalculating    = false;  // prevent multiple recalc calls
-const OFF_ROUTE_METRES  = 80;     // distance from route to trigger warning
-const OFF_ROUTE_TICKS   = 3;      // consecutive ticks before recalculating
-let _offRouteCount      = 0;      // consecutive GPS ticks off-route
 let _rerouteDebounce    = null;   // debounce timer for rerouting
-const OFF_ROUTE_METRES  = 80;     // metres before considered off-route
-const OFF_ROUTE_TICKS   = 3;      // consecutive ticks before rerouting
+const OFF_ROUTE_METRES  = 80;     // metres from route before warning/rerouting
+const OFF_ROUTE_TICKS   = 3;      // consecutive ticks off-route before rerouting
 let _navMode            = false;  // true when actively navigating
 let _compassHeading     = null;   // from device compass (more accurate than GPS heading)
 let _compassListener    = null;   // reference to remove listener on exit
