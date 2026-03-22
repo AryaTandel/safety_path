@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -1311,7 +1310,6 @@ html,body{
      SCRIPTS
 ══════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
 <script src="js/firebase-config.js"></script>
 <script src="js/auth.js"></script>
@@ -1381,8 +1379,6 @@ async function initApp() {
     doubleClickZoom: true,
     boxZoom: false,
     tap: true,
-    rotate: true,          // leaflet-rotate plugin
-    bearing: 0             // start north-up
   }).setView([19.076, 72.8777], 12);
 
 
@@ -2797,22 +2793,10 @@ function startNavigation() {
   // Remove start marker — arrow replaces it
   if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
 
-  // Animate map immediately
+  // Animate: wait for panel collapse, then fly to user at street level
   setTimeout(() => {
-    const hudH = (document.getElementById('nav-hud') || {}).offsetHeight || 145;
-    const br   = hudH + 20;
-    if (curRoutes.length && routeLayers[selIdx]) {
-      map.flyToBounds(routeLayers[selIdx].getBounds(), {
-        paddingTopLeft:[52,52], paddingBottomRight:[52, br],
-        animate:true, duration:0.9, maxZoom:16
-      });
-      setTimeout(() => {
-        map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
-      }, 1000);
-    } else {
-      map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
-    }
-  }, 420);
+    map.flyTo([initLat, initLng], 17, { animate: true, duration: 1.2 });
+  }, 450);
 
   // ── STEP 2: Refine with accurate GPS fix in background ───────────────
   // Once the real GPS fix arrives, update marker + repin route silently.
@@ -2923,28 +2907,26 @@ function updateNavStats(forceUpdate) {
   let durSecs = r.durSecs || 0;
 
   if (_navMode && fromCoords && toCoords) {
-    // Only recalculate when user moves 10m+ — prevents zoom/jitter flicker
     const movedDist = (_statsLastLat !== null)
       ? getDistance(fromCoords[0], fromCoords[1], _statsLastLat, _statsLastLng)
       : 999;
 
     if (forceUpdate || movedDist >= 10) {
-      // Total original distance from ORS
       const totalDistM   = r.distM   || 1;
       const totalDurSecs = r.durSecs || 1;
 
-      // Remaining straight-line distance to destination
+      // Straight-line remaining distance GPS → destination
       const remainDist = getDistance(
         fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]
       );
 
-      // Scale ORS duration proportionally to remaining distance
-      // This keeps HUD consistent with the route cards (both from ORS)
-      const ratio  = Math.min(remainDist / totalDistM, 1);
+      // Ratio of journey remaining (1.0 = not started, 0 = arrived)
+      // Clamp to [0,1] to prevent overshoot
+      const ratio = Math.max(0, Math.min(remainDist / totalDistM, 1));
+
       distM   = remainDist;
       durSecs = totalDurSecs * ratio;
 
-      // Cache
       _statsDistM   = distM;
       _statsDurSecs = durSecs;
       _statsLastLat = fromCoords[0];
@@ -2952,6 +2934,10 @@ function updateNavStats(forceUpdate) {
     } else {
       if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
     }
+  } else if (!_navMode) {
+    // Not navigating yet — show raw ORS values from route card
+    distM   = r.distM   || 0;
+    durSecs = r.durSecs || 0;
   }
 
   // Format distance
@@ -3260,23 +3246,10 @@ function startCompass() {
   }
 }
 
-// Rotate map using leaflet-rotate plugin so road is always ahead of user
-function rotateMapToHeading(heading) {
-  if (!_navFollowMode || heading === null || !map) return;
-  try {
-    // setBearing rotates the map so heading faces up — no CSS glitches
-    if (typeof map.setBearing === 'function') {
-      map.setBearing(heading);
-    }
-  } catch(e) {}
-}
-
-function setNavFollowMode(on) {
-  _navFollowMode = on;
-  if (!on && map && typeof map.setBearing === 'function') {
-    try { map.setBearing(0); } catch(e) {} // reset to north-up on exit
-  }
-}
+// Map rotation disabled — use north-up with auto pan instead
+// True rotation requires native app APIs, not available in browser Leaflet
+function rotateMapToHeading(heading) { /* no-op */ }
+function setNavFollowMode(on) { _navFollowMode = on; }
 
 function stopCompass() {
   if (_compassListener) {
@@ -3473,6 +3446,11 @@ function startLiveTracking() {
       // Update HUD stats live every GPS tick
       // Update stats — gated internally to only change when moved 10m+
       updateNavStats();
+
+      // Pan map to keep user centred (smooth follow)
+      if (_navFollowMode && map) {
+        map.panTo([lat, lng], { animate: true, duration: 0.5, easeLinearity: 1 });
+      }
 
       // Check if user is near any risk zones
       if (crimeZones.length) checkLiveRisk(lat, lng);
