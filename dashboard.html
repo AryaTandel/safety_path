@@ -281,7 +281,7 @@ html,body{
 
 
 
-/* Map rotation disabled — CSS rotate breaks Leaflet tap/pan coordinates */
+
 
 /* ══════ LEAFLET OVERRIDES ══════ */
 .leaflet-control-attribution{background:rgba(8,15,18,0.75)!important;color:var(--muted)!important;font-size:10px!important}
@@ -321,6 +321,34 @@ html,body{
 
 /* Autocomplete dropdown */
 .iw-w{position:relative}
+
+/* Clear (×) button inside destination input */
+.iw-clear {
+  position: absolute;
+  right: 10px; top: 50%; transform: translateY(-50%);
+  z-index: 2;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--border);
+  border: none;
+  color: var(--muted);
+  font-size: 0.7rem; font-weight: 700;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.iw-clear.visible { display: flex; }
+.iw-clear:hover { background: var(--red); color: #fff; }
+
+/* Destination emoji in HUD */
+#nstat-dest-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+  display: none;
+  margin-bottom: 0.2rem;
+}
 .acd{
   position:absolute;top:100%;left:0;right:0;
   background:var(--card2);border:1.5px solid var(--border);
@@ -507,36 +535,7 @@ html,body{
 @keyframes locP{0%{transform:translate(-50%,-50%) scale(0.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}}
 
 /* Navigation arrow marker */
-.nav-arrow-wrap{
-  position:relative;
-  width:36px;height:36px;
-  display:flex;align-items:center;justify-content:center;
-}
-.nav-arrow{
-  width:0;height:0;
-  border-left:10px solid transparent;
-  border-right:10px solid transparent;
-  border-bottom:28px solid #2dd4bf;
-  filter:drop-shadow(0 2px 6px rgba(45,212,191,0.7));
-  position:relative;z-index:2;
-  transition:transform 0.15s ease-out;
-  transform-origin:center center;
-}
-.nav-arrow::after{
-  content:'';
-  position:absolute;
-  bottom:-28px;left:-6px;
-  width:12px;height:10px;
-  background:#2dd4bf;
-  border-radius:0 0 4px 4px;
-}
-.nav-arrow-ring{
-  width:36px;height:36px;border-radius:50%;
-  background:rgba(45,212,191,0.15);
-  border:2px solid rgba(45,212,191,0.4);
-  position:absolute;top:0;left:0;
-  animation:locP 2s ease-out infinite;
-}
+
 
 /* ══════ SOS BANNER — non-blocking, floats over map ══════ */
 #sm{
@@ -1151,7 +1150,8 @@ html,body{
         <div class="iw-w">
           <div class="iw">
             <span class="ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
-            <input id="inp-to" type="text" placeholder="Type any place — Churchgate, IIT, Juhu Beach…" oninput="acSearch(this.value,'to')" autocomplete="off"/>
+            <input id="inp-to" type="text" placeholder="Type any place — Churchgate, IIT, Juhu Beach…" oninput="acSearch(this.value,'to');updateToClear()" autocomplete="off" style="padding-right:2rem"/>
+            <button class="iw-clear" id="to-clear" onclick="clearDestination()" title="Clear destination">×</button>
           </div>
           <div class="acd" id="ac-to"></div>
         </div>
@@ -2087,11 +2087,12 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
           div.innerHTML='<strong>'+iconFor(type,cat)+' '+name+'</strong>'
             +'<div class="aci-addr">'+fullAddr+'</div>'
             +'<span class="aci-dist">📍 '+distStr(parseFloat(lat),parseFloat(lon))+'</span>';
+          div.dataset.emoji = iconFor(type, cat);
           div.addEventListener('click', function() {
             document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
             document.getElementById('cat-panel').classList.remove('open');
             document.getElementById('cat-toggle').classList.remove('open');
-            pickPlace(this.dataset.field,this.dataset.lat,this.dataset.lon,this.dataset.label);
+            pickPlace(this.dataset.field,this.dataset.lat,this.dataset.lon,this.dataset.label,this.dataset.emoji);
           });
           dd.appendChild(div);
         });
@@ -2290,7 +2291,10 @@ function catSearch(category, field, btn) {
   acSearch('',field,category,true);
 }
 
-function pickPlace(field, lat, lon, label) {
+// Stores the emoji of the selected destination category
+let _destEmoji = '📍';
+
+function pickPlace(field, lat, lon, label, emoji) {
   document.getElementById('inp-'+field).value = label;
   document.getElementById('ac-'+field).style.display = 'none';
   const coords = [parseFloat(lat), parseFloat(lon)];
@@ -2311,12 +2315,15 @@ function pickPlace(field, lat, lon, label) {
       .openPopup();
   } else {
     toCoords = coords;
+    _destEmoji = emoji || '📍';
     if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
     toMarker = L.marker(coords, { icon: mkIcon('#c084fc'), zIndexOffset: 1000 })
       .addTo(map)
       .bindPopup("<b style=\"font-family:'Playfair Display',serif\">🏁 " + label.split(',')[0] + '</b>')
       .openPopup();
-    // Show only Find Safest Route button when destination is set
+    // Show clear button
+    updateToClear();
+    // Show Find Safest Route button
     const bfind = document.getElementById('bfind');
     bfind.style.display = 'flex';
     setTimeout(() => bfind.scrollIntoView({ behavior:'smooth', block:'nearest' }), 100);
@@ -2324,6 +2331,30 @@ function pickPlace(field, lat, lon, label) {
 
   map.setView(coords, 16);
 }
+
+function updateToClear() {
+  const inp = document.getElementById('inp-to');
+  const btn = document.getElementById('to-clear');
+  if (!btn) return;
+  btn.classList.toggle('visible', !!(inp && inp.value.trim()));
+}
+
+function clearDestination() {
+  const inp = document.getElementById('inp-to');
+  if (inp) { inp.value = ''; inp.placeholder = 'Type any place — Churchgate, IIT, Juhu Beach…'; }
+  const btn = document.getElementById('to-clear');
+  if (btn) btn.classList.remove('visible');
+  if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
+  toCoords = null;
+  _destEmoji = '📍';
+  document.getElementById('rsec').style.display = 'none';
+  document.getElementById('bfind').style.display = 'none';
+  routeLayers.forEach(l => { if (l) map.removeLayer(l); });
+  routeLayers = [];
+  curRoutes = [];
+  document.getElementById('ac-to').style.display = 'none';
+}
+
 
 document.addEventListener('click', e => {
   if (!e.target.closest('.iw-w'))
@@ -2344,7 +2375,7 @@ function centreOnUser() {
   function applyPos(lat, lng, acc) {
     const zoom = _navMode ? NAV_ZOOM : DEFAULT_ZOOM;
     map.flyTo([lat, lng], zoom, { animate: true, duration: 0.5 });
-    placeLocationMarker(lat, lng, acc, _navMode ? _lastHeading : null);
+    placeLocationMarker(lat, lng, acc);
     fromCoords = [lat, lng];
     if (btn) btn.classList.remove('locating');
     // Re-enable follow after manual centre
@@ -2366,32 +2397,19 @@ function centreOnUser() {
   );
 }
 
-function placeLocationMarker(lat, lng, accuracy, heading) {
+function placeLocationMarker(lat, lng, accuracy) {
   if (locMarker) { map.removeLayer(locMarker); locMarker=null; }
   if (locAccCircle) { map.removeLayer(locAccCircle); locAccCircle=null; }
   locAccCircle=L.circle([lat,lng],{
     radius:Math.min(accuracy,200),
     color:'#2dd4bf',weight:1,fillColor:'#2dd4bf',fillOpacity:0.06
   }).addTo(map);
-
-  let iconHtml, iconSize, iconAnchor;
-  if (_navMode && heading !== null && heading !== undefined) {
-    // Navigation mode — directional arrow rotated to heading
-    iconHtml = '<div class="nav-arrow-wrap">'
-      + '<div class="nav-arrow-ring"></div>'
-      + '<div class="nav-arrow" style="transform:rotate('+heading+'deg)"></div>'
-      + '</div>';
-    iconSize   = [36, 36];
-    iconAnchor = [18, 18];
-  } else {
-    // Default — pulsing dot
-    iconHtml   = '<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>';
-    iconSize   = [20, 20];
-    iconAnchor = [10, 10];
-  }
-
-  const icon = L.divIcon({ className:'', html:iconHtml, iconSize, iconAnchor, popupAnchor:[0,-12] });
-  locMarker = L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
+  const icon=L.divIcon({
+    className:'',
+    html:'<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>',
+    iconSize:[20,20], iconAnchor:[10,10], popupAnchor:[0,-12]
+  });
+  locMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
     .bindPopup('<div style="font-family:Nunito,sans-serif;text-align:center;padding:0.2rem 0.4rem">'
       +'<div style="font-weight:700;font-size:0.86rem">Current Location</div>'
       +'<div style="font-size:0.7rem;color:var(--muted)">&#177;'+Math.round(accuracy)+'m</div></div>');
@@ -2814,7 +2832,7 @@ function startNavigation() {
   const initLng = fromCoords ? fromCoords[1] : 72.877;
 
   // Show arrow at known position immediately
-  placeLocationMarker(initLat, initLng, 30, _lastHeading);
+  placeLocationMarker(initLat, initLng, 30);
 
   // Hide non-selected routes immediately
   if (routeLayers && routeLayers.length) {
@@ -2851,7 +2869,7 @@ function startNavigation() {
         const lng = pos.coords.longitude;
         const acc = pos.coords.accuracy;
         fromCoords = [lat, lng];
-        placeLocationMarker(lat, lng, acc, _lastHeading);
+        placeLocationMarker(lat, lng, acc);
         // Ensure zoom is at street level after GPS refine
         if (map.getZoom() < 16) {
           map.setView([lat, lng], NAV_ZOOM, { animate: true });
@@ -2902,6 +2920,12 @@ function showNavHud() {
   });
   // Map layers now controlled via on-map buttons (no HUD layer toggles)
 
+  // Show destination emoji in HUD
+  const emojiEl = document.getElementById('nstat-dest-emoji');
+  if (emojiEl) {
+    emojiEl.textContent = _destEmoji || '📍';
+    emojiEl.style.display = 'block';
+  }
   updateNavStats(true);  // force initial display — uses current curRoutes[selIdx].durSecs
   // Stats update every GPS tick when user moves, and after every refetch
 
@@ -3157,10 +3181,16 @@ function exitNavigation() {
 
   // Reset destination only — keep fromCoords so location dot stays
   toCoords = null;
+  _destEmoji = '📍';
 
   // Reset destination input — keep origin as-is so user's location stays shown
   document.getElementById('inp-to').value = '';
   document.getElementById('inp-to').placeholder = 'Type any place — Churchgate, IIT, Juhu Beach…';
+  // Hide clear button and dest emoji
+  const toClearBtn = document.getElementById('to-clear');
+  if (toClearBtn) toClearBtn.classList.remove('visible');
+  const emojiEl2 = document.getElementById('nstat-dest-emoji');
+  if (emojiEl2) emojiEl2.style.display = 'none';
 
   // Hide route results section
   document.getElementById('rsec').style.display = 'none';
@@ -3244,7 +3274,6 @@ function applyStoredTheme() {
 // Stores the traversed path coordinates
 let traversedCoords = [];
 let traversedLayer  = null;
-let _lastHeading        = null;   // last known heading in degrees
 let _liveSpeedMps       = null;   // actual GPS speed in m/s (updated each tick)
 let _navFollowMode      = false;  // true = map pans to follow user
 let _offRouteCount      = 0;      // consecutive GPS ticks off-route
@@ -3267,7 +3296,6 @@ function startLiveTracking() {
 
   // Reset traversed path and stats cache for new journey
   traversedCoords = [];
-  _lastHeading      = null;
   _statsLastLat     = null;
   _statsLastLng     = null;
   _statsDistM       = null;
@@ -3275,39 +3303,17 @@ function startLiveTracking() {
   _offRouteCount    = 0;
   _isRecalculating  = false;
   _navMode = true;
-  setNavFollowMode(true);
+  _navFollowMode = true;
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
 
   liveWatchId = navigator.geolocation.watchPosition(
     pos => {
-      const { latitude: lat, longitude: lng, accuracy: acc, heading: rawHeading, speed: gpsSpeed } = pos.coords;
+      const { latitude: lat, longitude: lng, accuracy: acc, speed: gpsSpeed } = pos.coords;
       // Track actual speed — GPS speed is in m/s, only use if valid
       if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
 
-      // Heading: 1) GPS heading, 2) computed from movement
-      let heading = null;
-      if (rawHeading !== null && rawHeading >= 0) {
-        heading = rawHeading;
-        _lastHeading = heading;
-      } else if (traversedCoords.length >= 1) {
-        // Compute bearing from last known position to current
-        const prev = traversedCoords[traversedCoords.length - 1];
-        const dLng = (lng - prev[1]) * Math.PI / 180;
-        const lat1 = prev[0] * Math.PI / 180;
-        const lat2 = lat  * Math.PI / 180;
-        const y = Math.sin(dLng) * Math.cos(lat2);
-        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-        const bear = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-        if (getDistance(lat, lng, prev[0], prev[1]) > 3) { // only update if moved >3m
-          heading = bear;
-          _lastHeading = heading;
-        } else {
-          heading = _lastHeading; // reuse last if barely moved
-        }
-      }
-
-      // Move arrow marker with direction
-      placeLocationMarker(lat, lng, acc, heading);
+      // Move location marker
+      placeLocationMarker(lat, lng, acc);
 
       // Update fromCoords
       fromCoords = [lat, lng];
@@ -3481,7 +3487,7 @@ function stopLiveTracking() {
   _navFollowMode = false;
   // Switch back to pulsing dot
   if (locMarker && fromCoords) {
-    placeLocationMarker(fromCoords[0], fromCoords[1], 20, null);
+    placeLocationMarker(fromCoords[0], fromCoords[1], 20);
   }
 }
 
@@ -3518,6 +3524,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         <!-- Centre stats -->
         <div id="nav-stats-center">
+          <div id="nstat-dest-emoji"></div>
           <div id="nstat-time-val">—</div>
           <div id="nstat-time-lbl">Time left</div>
           <div id="nav-stats-sub">
