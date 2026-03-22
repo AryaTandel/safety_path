@@ -3453,6 +3453,37 @@ function startLiveTracking() {
       // Check if user is near any risk zones
       if (crimeZones.length) checkLiveRisk(lat, lng);
 
+      // ── Alert if user's current path is riskier than recommended ─────────
+      // If user has deviated and is now on a high-risk path, warn them
+      // even if they haven't fully left the route yet.
+      if (_navMode && crimeZones.length && traversedCoords.length % 5 === 0) {
+        // Score the current position against risk zones
+        const h2 = SH[_lastAutoSlot] || new Date().getHours();
+        const cache2 = buildZoneCache(h2);
+        const currentRisk = scorePoint(lat, lng, cache2);
+
+        // If user is in a significant risk zone AND it's not on the selected route
+        if (currentRisk >= 6.0) {
+          // Check if the recommended route passes through here too
+          const onRecommendedRoute = routeLayers[selIdx] &&
+            map.hasLayer(routeLayers[selIdx]) &&
+            (() => {
+              const ll = routeLayers[selIdx].getLatLngs();
+              for (const pt of ll) {
+                if (getDistance(lat, lng, pt.lat, pt.lng) < 100) return true;
+              }
+              return false;
+            })();
+
+          if (!onRecommendedRoute) {
+            const riskInfo = riskLabel(currentRisk);
+            showToast('⚠️ ' + riskInfo.label + ' area — not on your safe route!');
+            if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150]);
+            throttledSpeak('Warning. You are in a ' + riskInfo.label.toLowerCase() + ' area. Return to your safe route.');
+          }
+        }
+      }
+
       // Check arrival — if within 30m of destination, trigger feedback
       if (toCoords && !_journeyEnded) {
         const distToDest = getDistance(lat, lng, toCoords[0], toCoords[1]);
