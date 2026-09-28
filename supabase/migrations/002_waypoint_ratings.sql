@@ -44,7 +44,7 @@ create policy "no direct read access"
 
 -- Groups nearby reviews (~110 m grid) by time-of-day slot and turns any
 -- well-supported, majority-unsafe cluster into a small synthetic risk
--- zone the app can treat exactly like one of its predefined crime zones.
+-- zone the app can treat exactly like one of its predefined crime zones
 -- Fetched once (all slots at once); the app filters by slot client-side.
 create or replace function get_waypoint_risk_zones()
 returns table (lat double precision, lng double precision, radius int, risk numeric, time_slot text, rating_count bigint)
