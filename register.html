@@ -5,9 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Safety Path – Create Account</title>
   <link rel="stylesheet" href="css/styles.css"/>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- Supabase SDKs -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/auth-new.js"></script>
+  <!-- Voice ID enrollment for SOS check-ins -->
+  <script src="js/voice-lang.js"></script>
+  <script src="js/voice-auth.js"></script>
+  <!-- Regional language switcher (Hindi, Bengali, Tamil, Telugu, and other Indian state languages) -->
+  <script src="js/i18n.js"></script>
+  <style>
+    @keyframes sosP { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.08); opacity:0.85; } }
+  </style>
 </head>
 <body>
 <div class="page-wrap">
@@ -195,8 +205,16 @@
       </div>
     </div>
 
+    <div class="form-group">
+      <label>Contact Email <span class="req">*</span></label>
+      <div class="input-wrap">
+        <span class="icon">✉️</span>
+        <input type="email" id="reg-ec-email" placeholder="contact@example.com"/>
+      </div>
+    </div>
+
     <div class="alert alert-info" style="margin-top:0.5rem;">
-      ℹ️ Your emergency contact will receive an SMS + location link if you mark yourself unsafe.
+      ℹ️ Your emergency contact will receive an email + location link automatically if you trigger SOS.
     </div>
 
     <div style="display:flex;gap:0.75rem;margin-top:1rem;">
@@ -258,6 +276,44 @@
   </div>
 
   <!-- ══════════════════════════════════════════
+       STEP 4B – Voice ID for SOS (voice input)
+  ══════════════════════════════════════════ -->
+  <div id="s4v" style="display:none;">
+    <h1 class="page-title">Set up your Voice ID</h1>
+    <p class="page-subtitle" id="voiceRegDesc">
+      During an SOS alert, the check-in timer only resets when it hears <strong>your</strong> voice
+      say a safe phrase — not just anyone's. Record 3 short samples now (about 15 seconds).
+    </p>
+
+    <div style="text-align:center;margin:1rem 0;">
+      <div id="voiceRegMic" style="width:72px;height:72px;border-radius:50%;margin:0 auto 0.9rem;
+        background:radial-gradient(circle at 35% 35%,#5eead4,#0d9488);
+        display:flex;align-items:center;justify-content:center;color:#fff;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Language you'll speak in during SOS checks</label>
+      <div class="input-wrap">
+        <span class="icon">🌐</span>
+        <select id="voiceRegLangSelect" onchange="onVoiceRegLangChange(this.value)"></select>
+      </div>
+    </div>
+    <p id="voiceRegLangHint" style="font-size:0.78rem;color:var(--muted);margin:-0.5rem 0 0.75rem;"></p>
+
+    <div id="voiceRegProgress" style="display:none;font-size:0.82rem;color:var(--teal);font-weight:700;margin-bottom:0.75rem;text-align:center;"></div>
+
+    <div style="display:flex;gap:0.75rem;">
+      <button class="btn btn-ghost" onclick="skipVoiceEnrollment()" style="width:auto;padding:0.75rem 1.2rem;">Skip for now</button>
+      <button class="btn btn-primary" id="voiceRegStartBtn" onclick="startVoiceRegistration()">🎙️ Start Recording</button>
+    </div>
+    <p style="color:var(--muted);font-size:0.75rem;margin-top:1rem;text-align:center;">
+      You can also set this up later from Dashboard → Voice Safety Check.
+    </p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
        STEP 5 – Success
   ══════════════════════════════════════════ -->
   <div id="s5" style="display:none;">
@@ -283,8 +339,6 @@
 </div>
 </div>
 
-<script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
 <script>
 
 // ── State ─────────────────────────────────────────────────────
@@ -318,7 +372,8 @@ function goToStep(n) {
   for (let i = 1; i <= 5; i++) {
     document.getElementById(`s${i}`).style.display = i === n ? 'block' : 'none';
   }
-  // Update step indicators
+  const s4v = document.getElementById('s4v');
+  if (s4v) s4v.style.display = 'none'; // always hidden unless showVoiceStep() explicitly opened it
   const inds = [1,2,3,4];
   inds.forEach(i => {
     const el = document.getElementById(`step-ind-${i}`);
@@ -328,7 +383,6 @@ function goToStep(n) {
     if (i < n) el.classList.add('done');
     else if (i === n) el.classList.add('active');
     else el.style.opacity = '0.4';
-    // mark step dot as check if done
     const dot = el.querySelector('.step-dot');
     if (i < n) dot.textContent = '✓';
     else dot.textContent = i;
@@ -377,10 +431,13 @@ async function handleRegVerifyOTP() {
   const otp = [...document.querySelectorAll('.rotp')].map(d => d.value).join('');
   if (otp.length !== 6) { showGlobal('Enter all 6 digits.'); return; }
   showGlobal('Verifying…', 'info');
-  const result = await verifyOTP(otp);
+  // UPDATED: pass phone + otp (Supabase requires both)
+  const phone = '+91' + document.getElementById('reg-phone').value.trim();
+  const result = await verifyOTP(phone, otp);
   if (result.success) {
-    state.uid = result.user.uid;
-    state.phone = result.user.phoneNumber;
+    // UPDATED: .id instead of .uid, phone stored from local variable
+    state.uid = result.user.id;
+    state.phone = phone;
     state.authMethod = 'phone';
     goToStep(2);
     document.getElementById('alert-global').innerHTML = '';
@@ -392,18 +449,9 @@ async function handleRegVerifyOTP() {
 async function handleGoogleReg() {
   showGlobal('Opening Google Sign-In…', 'info');
   const result = await signInWithGoogle();
-  if (result.success) {
-    state.uid = result.user.uid;
-    state.email = result.user.email;
-    state.name = result.user.displayName || '';
-    state.authMethod = 'google';
-    if (state.name) document.getElementById('reg-name').value = state.name;
-    if (state.email) document.getElementById('reg-email').value = state.email;
-    goToStep(2);
-    document.getElementById('alert-global').innerHTML = '';
-  } else {
-    showGlobal(result.error || 'Google Sign-In failed.');
-  }
+  if (!result.success) showGlobal(result.error || 'Google Sign-In failed.');
+  // On success the browser goes to Google, returns to index.html, and is
+  // sent back here with the Google details pre-filled (see DOMContentLoaded).
 }
 
 // ── Step 2: Personal Details ───────────────────────────────────
@@ -421,10 +469,12 @@ function validateStep2() {
 
 // ── Step 3: Emergency Contact ──────────────────────────────────
 function validateStep3() {
-  const ecName = document.getElementById('reg-ec-name').value.trim();
+  const ecName  = document.getElementById('reg-ec-name').value.trim();
   const ecPhone = document.getElementById('reg-ec-phone').value.trim();
-  if (!ecName) { showGlobal('Please enter emergency contact name.'); return; }
+  const ecEmail = document.getElementById('reg-ec-email').value.trim();
+  if (!ecName)  { showGlobal('Please enter emergency contact name.'); return; }
   if (ecPhone.length !== 10) { showGlobal('Please enter a valid emergency contact number.'); return; }
+  if (!ecEmail || !ecEmail.includes('@')) { showGlobal('Please enter a valid emergency contact email.'); return; }
   goToStep(4);
 }
 
@@ -444,32 +494,130 @@ async function completeRegistration() {
     phone: state.phone || '',
     emergencyContact: document.getElementById('reg-ec-name').value.trim(),
     emergencyPhone: '+91' + document.getElementById('reg-ec-phone').value.trim(),
+    emergencyEmail: document.getElementById('reg-ec-email').value.trim(),
     authMethod: state.authMethod,
     privacyMode: document.getElementById('pref-privacy').checked,
     contributeData: document.getElementById('pref-contribute').checked,
     checkinAlerts: document.getElementById('pref-checkin').checked
   };
 
+  // UPDATED: state.uid is now a Supabase UUID, saveUserProfile uses it as auth_id
   const result = await saveUserProfile(state.uid, formData);
 
   if (result.success) {
-    // Clear session storage
     ['pendingUid','pendingPhone','pendingEmail','pendingName','authMethod']
       .forEach(k => sessionStorage.removeItem(k));
 
-    // Populate success screen
     document.getElementById('suc-name').textContent = formData.name.split(' ')[0];
     document.getElementById('suc-details').innerHTML = `
       <div>👤 <b>${formData.name}</b> · ${formData.age} yrs · ${formData.gender}</div>
       <div>💼 ${formData.occupation}</div>
       <div>📱 ${formData.phone || '—'}</div>
-      <div>🆘 Emergency: ${formData.emergencyContact} (${formData.emergencyPhone})</div>
+      <div>🆘 Emergency: ${formData.emergencyContact} (${formData.emergencyPhone}) · ${formData.emergencyEmail}</div>
     `;
-    goToStep(5);
+
+    // Offer voice enrollment right here during sign-up if the user opted into check-in
+    // alerts and their browser can actually record/recognise speech — otherwise go
+    // straight to the success screen (they can still set it up later on the dashboard).
+    const hasMic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    const canVoice = formData.checkinAlerts && hasMic && typeof enrollUserVoice === 'function';
+    if (canVoice) {
+      showVoiceStep();
+    } else {
+      if (formData.checkinAlerts && !hasMic) {
+        // Microphone access requires a secure context (https:// or localhost) — tell
+        // the person why voice setup wasn't offered instead of silently skipping it.
+        const note = document.createElement('div');
+        note.className = 'alert alert-info';
+        note.style.marginTop = '0.75rem';
+        note.textContent = 'ℹ️ Voice ID setup needs a secure (https://) connection, so it was skipped here. You can still set it up any time from Dashboard → Voice Safety Check.';
+        document.getElementById('suc-details').insertAdjacentElement('afterend', note);
+      }
+      goToStep(5);
+    }
   } else {
     btn.disabled = false; btn.textContent = 'Complete Registration ✓';
     showGlobal('Registration failed: ' + result.error);
   }
+}
+
+// ── Step 4B: Voice ID enrollment (voice input during registration) ────
+function showVoiceStep() {
+  document.getElementById('steps-bar').style.display = 'none';
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById(`s${i}`);
+    if (el) el.style.display = 'none';
+  }
+  document.getElementById('s4v').style.display = 'block';
+  populateVoiceRegLangSelect();
+  updateVoiceRegLangHint();
+}
+
+function populateVoiceRegLangSelect() {
+  const select = document.getElementById('voiceRegLangSelect');
+  if (!select || typeof VOICE_LANG_MAP === 'undefined') return;
+  const current = (typeof getVoiceLangCode === 'function') ? getVoiceLangCode() : 'en';
+  select.innerHTML = '';
+  Object.keys(VOICE_LANG_MAP).forEach(code => {
+    const cfg = VOICE_LANG_MAP[code];
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = cfg.speechSupported ? cfg.label : `${cfg.label} (limited support)`;
+    if (code === current) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function onVoiceRegLangChange(code) {
+  if (typeof setVoiceLangCode === 'function') setVoiceLangCode(code);
+  updateVoiceRegLangHint();
+}
+
+function updateVoiceRegLangHint() {
+  const hint = document.getElementById('voiceRegLangHint');
+  if (hint && typeof getVoiceLangConfig === 'function') {
+    const cfg = getVoiceLangConfig();
+    hint.textContent = cfg.speechSupported
+      ? `We'll listen for your spoken safe-word in ${cfg.label}.`
+      : `Your browser can't reliably transcribe ${cfg.label} speech yet — please say "safe" or "I'm safe" in English or Hindi during SOS checks.`;
+  }
+}
+
+async function startVoiceRegistration() {
+  if (!state.uid) { showGlobal('Session expired. Please sign in again.'); return; }
+
+  const startBtn = document.getElementById('voiceRegStartBtn');
+  const progress = document.getElementById('voiceRegProgress');
+  const mic      = document.getElementById('voiceRegMic');
+  const desc     = document.getElementById('voiceRegDesc');
+
+  startBtn.disabled = true;
+  startBtn.textContent = 'Recording…';
+  progress.style.display = 'block';
+  const vcfg = (typeof getVoiceLangConfig === 'function') ? getVoiceLangConfig() : null;
+  const examplePhrase = (vcfg && vcfg.safeWords && vcfg.safeWords[0]) ? vcfg.safeWords[0] : 'I am safe';
+  desc.textContent = `Say a short phrase like "${examplePhrase}" clearly, in a quiet spot, each time you're prompted.`;
+  mic.style.animation = 'sosP 1s ease-in-out infinite';
+
+  try {
+    await enrollUserVoice(state.uid, (step, total) => {
+      progress.textContent = `Sample ${step} of ${total}… speak now`;
+    });
+    progress.textContent = '✅ Voice ID saved!';
+    desc.textContent = 'Your voice is now set up for SOS check-ins.';
+    setTimeout(() => goToStep(5), 1200);
+  } catch (e) {
+    progress.textContent = '';
+    showGlobal(e.message || 'Could not record your voice. You can try again or skip and set this up later.');
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try Again';
+  } finally {
+    mic.style.animation = '';
+  }
+}
+
+function skipVoiceEnrollment() {
+  goToStep(5);
 }
 </script>
 </body>

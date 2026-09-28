@@ -9,115 +9,93 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- UPDATED: Supabase replaces Firebase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/crypto.js"></script>
+<script src="js/auth-new.js"></script>
 <script>
 // Device detection — mobile gets closer zoom for navigation
 const _isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
                || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
-const NAV_ZOOM     = _isMobile ? 20 : 18;  // nav zoom level
-const DEFAULT_ZOOM = _isMobile ? 17 : 16;  // locate/centre zoom
+const NAV_ZOOM     = _isMobile ? 20 : 18;
+const DEFAULT_ZOOM = _isMobile ? 17 : 16;
+</script>
+<script>
+// Map tiles. CARTO now requires a free API key for its basemaps.
+// Get one (no account needed) at https://carto.com/basemaps/apikey/ and paste it below.
+// Leave it empty to use OpenStreetMap's own tiles instead (no key needed).
+window.CARTO_API_KEY = '';
 </script>
 <script>window.ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImMyZTM5MThmOTM1YzQ3ZmE5M2I2ZjA3ZTdhNGYyMzk1IiwiaCI6Im11cm11cjY0In0=';</script>
 
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-/* ══════════════════════════════════════
-   DARK MODE — Deep Ocean Teal
-══════════════════════════════════════ */
 :root{
-  /* Backgrounds */
   --bg:#080f12;
   --card:#0d1a1f;
   --card2:#0f2028;
   --border:#14323d;
-
-  /* Teal palette — dominant */
   --teal:#2dd4bf;
   --teal-dim:#1a9e8f;
   --teal-glow:rgba(45,212,191,0.15);
   --teal-glow2:rgba(45,212,191,0.08);
   --teal-dark:#0d4a42;
   --teal-light:#7ee8d8;
-
-  /* Accent (soft coral for contrast only) */
   --accent:#e8607a;
   --accent-glow:rgba(232,96,122,0.12);
-
-  /* Semantic */
   --amber:#f59e0b;
   --red:#f43f5e;
   --green:#34d399;
-
-  /* Text */
   --fg:#e2f4f1;
   --fg2:#a8d8d0;
   --muted:#4d7a72;
   --placeholder:#2a5a54;
-
-  /* Inputs */
   --input-bg:rgba(45,212,191,0.04);
   --input-focus:rgba(45,212,191,0.08);
-
-  /* Surfaces */
   --sbt-bg:rgba(45,212,191,0.06);
   --rc-bg:rgba(45,212,191,0.03);
   --topbar-bg:rgba(8,15,18,0.95);
   --panel-bg:rgba(10,18,22,0.98);
   --shadow:rgba(0,0,0,0.7);
   --modal-bg:rgba(0,0,0,0.75);
-
-  /* Gradients */
   --grad:linear-gradient(135deg,#2dd4bf,#0891b2);
   --grad-soft:linear-gradient(135deg,rgba(45,212,191,0.12),rgba(8,145,178,0.08));
   --grad-accent:linear-gradient(135deg,#2dd4bf,#7ee8d8);
-
-  /* Typography */
   --font-h:'Playfair Display',serif;
   --font-b:'Nunito',sans-serif;
   --panel:318px;
 }
 
-/* ══════════════════════════════════════
-   LIGHT MODE — Seafoam Ivory
-══════════════════════════════════════ */
 html.light{
   --bg:#f0faf8;
   --card:#ffffff;
   --card2:#e8f7f4;
   --border:#b2e0d8;
-
   --teal:#0e9488;
   --teal-dim:#0b7a70;
   --teal-glow:rgba(14,148,136,0.12);
   --teal-glow2:rgba(14,148,136,0.06);
   --teal-dark:#ccf0eb;
   --teal-light:#0e9488;
-
   --accent:#e05470;
   --accent-glow:rgba(224,84,112,0.1);
-
   --amber:#d97706;
   --red:#e11d48;
   --green:#059669;
-
   --fg:#0a2e2a;
   --fg2:#1a5a52;
   --muted:#5a8a82;
   --placeholder:#96c4bc;
-
   --input-bg:rgba(14,148,136,0.05);
   --input-focus:rgba(14,148,136,0.09);
-
   --sbt-bg:rgba(14,148,136,0.07);
   --rc-bg:rgba(14,148,136,0.03);
   --topbar-bg:rgba(240,250,248,0.97);
   --panel-bg:rgba(248,253,252,0.99);
   --shadow:rgba(0,60,50,0.12);
   --modal-bg:rgba(0,0,0,0.45);
-
   --grad:linear-gradient(135deg,#0e9488,#0891b2);
   --grad-soft:linear-gradient(135deg,rgba(14,148,136,0.1),rgba(8,145,178,0.07));
   --grad-accent:linear-gradient(135deg,#0e9488,#34d399);
@@ -125,18 +103,15 @@ html.light{
 
 html,body{
   height:100%;
-  /* Use dvh (dynamic viewport height) on iPhone — accounts for Safari toolbar */
   height:100dvh;
   overflow:hidden;
   background:var(--bg);color:var(--fg);font-family:var(--font-b);
   transition:background 0.3s,color 0.3s;
-  /* Prevent iOS bounce scroll */
   overscroll-behavior:none;
   -webkit-overflow-scrolling:touch;
 }
 #app{display:flex;height:100vh;height:100dvh}
 
-/* ══════ TOPBAR ══════ */
 #topbar{
   position:fixed;top:0;left:0;right:0;z-index:1000;
   height:calc(56px + env(safe-area-inset-top));
@@ -148,7 +123,6 @@ html,body{
   transition:background 0.3s,border-color 0.3s;
 }
 
-/* Brand */
 .brand{display:flex;align-items:center;gap:0.55rem;text-decoration:none;flex-shrink:0}
 .brand-icon{
   width:30px;height:30px;border-radius:9px;
@@ -159,7 +133,6 @@ html,body{
 .brand-name{font-family:var(--font-h);font-size:1.05rem;font-weight:700;color:var(--fg)}
 .brand-name span{background:var(--grad-accent);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
-/* ── Time Badge (topbar centre) ── */
 #tbadge{
   display:flex;align-items:center;gap:0.5rem;
   background:var(--card);
@@ -187,7 +160,6 @@ html,body{
 }
 #tbadge-date{font-size:0.6rem;color:var(--muted);font-weight:500;margin-left:0.35rem}
 
-/* Right side */
 #tbr{margin-left:auto;display:flex;align-items:center;gap:0.55rem;flex-shrink:0}
 #uchip{
   display:flex;align-items:center;gap:0.4rem;
@@ -209,7 +181,6 @@ html,body{
 }
 #themeBtn:hover{border-color:var(--teal);color:var(--teal);transform:scale(1.08)}
 
-/* ══════ PANEL ══════ */
 #panel{
   width:var(--panel);height:100vh;height:100dvh;
   padding-top:calc(56px + env(safe-area-inset-top));
@@ -220,13 +191,11 @@ html,body{
              background 0.3s,border-color 0.3s;
   position:relative;
 }
-/* Collapsed state — panel slides off screen */
 #panel.collapsed {
   width: 0;
   border-right: none;
   overflow: hidden;
 }
-/* On mobile, collapsed panel slides down fully */
 @media(max-width:640px) {
   #panel.collapsed {
     height: 0;
@@ -235,7 +204,6 @@ html,body{
   #mw { height: 100dvh; }
 }
 
-/* Toggle arrow tab — hidden by default, only shown when panel is collapsed */
 #panel-toggle {
   position: fixed;
   top: 50%;
@@ -248,7 +216,7 @@ html,body{
   border: 1.5px solid var(--border);
   border-left: none;
   border-radius: 0 12px 12px 0;
-  display: none; /* hidden until panel collapses */
+  display: none;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -263,7 +231,6 @@ html,body{
 #panel-toggle svg {
   flex-shrink: 0;
 }
-/* Arrow points right (open panel) when visible */
 #panel-toggle svg {
   transform: rotate(180deg);
 }
@@ -275,22 +242,15 @@ html,body{
 #pi::-webkit-scrollbar{width:3px}
 #pi::-webkit-scrollbar-thumb{background:var(--teal-dark);border-radius:3px}
 
-/* ══════ MAP ══════ */
 #mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
 #map{width:100%;height:100%}
 
-
-
-
-
-/* ══════ LEAFLET OVERRIDES ══════ */
 .leaflet-control-attribution{background:rgba(8,15,18,0.75)!important;color:var(--muted)!important;font-size:10px!important}
 .leaflet-control-attribution a{color:var(--teal)!important}
 .leaflet-popup-content-wrapper{background:var(--card)!important;color:var(--fg)!important;border:1px solid var(--border)!important;border-radius:14px!important;box-shadow:0 12px 40px var(--shadow)!important}
 .leaflet-popup-tip{background:var(--card)!important}
 .leaflet-popup-close-button{color:var(--muted)!important}
 
-/* ══════ SECTION LABELS ══════ */
 .sl{
   font-size:0.62rem;font-weight:700;color:var(--muted);
   text-transform:uppercase;letter-spacing:0.13em;margin-bottom:0.38rem;
@@ -298,7 +258,6 @@ html,body{
 }
 .sl::before{content:'';width:12px;height:2px;background:var(--grad);border-radius:1px;flex-shrink:0}
 
-/* ══════ INPUTS ══════ */
 .iw{position:relative;display:flex;align-items:center}
 .iw .ic{position:absolute;left:11px;pointer-events:none;z-index:1;display:flex;align-items:center;color:var(--muted)}
 .iw input{
@@ -319,10 +278,8 @@ html,body{
 .sep .dt{width:7px;height:7px;border-radius:50%;background:var(--grad);flex-shrink:0}
 .hd{height:1px;background:var(--border);margin:0.08rem 0}
 
-/* Autocomplete dropdown */
 .iw-w{position:relative}
 
-/* Clear (×) button inside destination input */
 .iw-clear {
   position: absolute;
   right: 10px; top: 50%; transform: translateY(-50%);
@@ -342,7 +299,6 @@ html,body{
 .iw-clear.visible { display: flex; }
 .iw-clear:hover { background: var(--red); color: #fff; }
 
-/* Destination emoji in HUD */
 #nstat-dest-emoji {
   font-size: 1.1rem;
   line-height: 1;
@@ -369,7 +325,6 @@ html,body{
 .aci-addr{font-size:0.67rem;color:var(--muted);margin-top:0.12rem;line-height:1.3}
 .aci-dist{display:inline-block;font-size:0.61rem;font-weight:700;color:var(--teal);margin-top:0.12rem}
 
-/* ══════ LOCATION BUTTON ══════ */
 #lbtn{
   display:flex;align-items:center;justify-content:center;gap:0.45rem;width:100%;
   padding:0.5rem 1rem;
@@ -381,7 +336,6 @@ html,body{
 #lbtn:hover{background:var(--teal-glow);border-color:var(--teal)}
 #lbtn:disabled{opacity:0.5;cursor:not-allowed}
 
-/* ══════ PILL TOGGLES ══════ */
 .sw{display:flex;gap:0.3rem;flex-wrap:wrap}
 .sbt{
   background:var(--sbt-bg);border:1.5px solid var(--border);
@@ -395,28 +349,23 @@ html,body{
   color:var(--teal);box-shadow:0 0 0 2px var(--teal-glow);
 }
 
-/* ══════ BUTTONS ══════ */
 .btn{
   display:flex;align-items:center;justify-content:center;gap:0.42rem;
   width:100%;padding:0.75rem;border:none;border-radius:12px;
   font-family:var(--font-b);font-size:0.85rem;font-weight:700;
   letter-spacing:0.01em;cursor:pointer;transition:all 0.22s;
 }
-/* Primary teal gradient */
 .bt{background:var(--grad);color:#fff;box-shadow:0 4px 18px var(--teal-glow)}
 .bt:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 8px 24px var(--teal-glow)}
 .bt:disabled{opacity:0.4;cursor:not-allowed;transform:none;filter:none;box-shadow:none}
-/* Outline */
 .bo{background:transparent;border:1.5px solid var(--border);color:var(--muted)}
 .bo:hover{border-color:var(--teal);color:var(--teal)}
-/* Danger */
 .br{
   background:rgba(244,63,94,0.08);
   border:1.5px solid rgba(244,63,94,0.35);color:#fb7185;
 }
 .br:hover{background:rgba(244,63,94,0.16);transform:translateY(-1px)}
 
-/* ══════ MAP LAYER TOGGLES ══════ */
 #ltog{display:flex;gap:0.45rem}
 .lbt{
   flex:1;padding:0.42rem;border-radius:9px;
@@ -427,7 +376,6 @@ html,body{
 }
 .lbt.on{background:var(--teal-glow);border-color:var(--teal);color:var(--teal)}
 
-/* ══════ CATEGORY FILTER ══════ */
 #cat-toggle{
   display:flex;align-items:center;justify-content:space-between;
   width:100%;
@@ -470,7 +418,6 @@ html,body{
   display:flex;align-items:center;justify-content:center;gap:0.28rem;
 }
 
-/* ══════ ROUTE CARDS ══════ */
 .rc{
   background:var(--rc-bg);border:1.5px solid var(--border);
   border-radius:14px;padding:0.8rem 0.95rem;cursor:pointer;
@@ -501,7 +448,6 @@ html,body{
 }
 .rd{width:5px;height:5px;border-radius:50%}
 
-/* ══════ ORS WARNING ══════ */
 #ow{
   background:rgba(245,158,11,0.07);border:1.5px solid rgba(245,158,11,0.22);
   border-radius:11px;padding:0.65rem 0.8rem;font-size:0.75rem;
@@ -509,7 +455,6 @@ html,body{
 }
 #ow a{color:var(--teal)}
 
-/* ══════ SPINNER ══════ */
 .spin{
   display:inline-block;width:13px;height:13px;
   border:2px solid rgba(45,212,191,0.2);border-top-color:var(--teal);
@@ -517,7 +462,6 @@ html,body{
 }
 @keyframes sp{to{transform:rotate(360deg)}}
 
-/* ══════ LIVE LOCATION MARKER ══════ */
 .loc-wrap{position:relative;width:20px;height:20px}
 .loc-dot{
   width:13px;height:13px;border-radius:50%;
@@ -534,7 +478,6 @@ html,body{
 .loc-ring2{animation-delay:0.75s!important}
 @keyframes locP{0%{transform:translate(-50%,-50%) scale(0.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}}
 
-/* Directional arrow — shown during navigation */
 .nav-arrow-wrap{position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center}
 .nav-arrow{
   width:0;height:0;
@@ -552,10 +495,6 @@ html,body{
   animation:locP 2s ease-out infinite;
 }
 
-/* Navigation arrow marker */
-
-
-/* ══════ SOS BANNER — non-blocking, floats over map ══════ */
 #sm{
   display:none;
   position:fixed;
@@ -567,7 +506,7 @@ html,body{
   transition: left 0.35s cubic-bezier(0.4,0,0.2,1);
   animation:slideDown 0.32s cubic-bezier(0.34,1.56,0.64,1);
 }
-#sm.panel-gone { left: 34px; } /* when panel is collapsed */
+#sm.panel-gone { left: 34px; }
 #sm.open{display:block}
 @keyframes slideDown{from{transform:translateY(-16px);opacity:0}to{transform:translateY(0);opacity:1}}
 @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -597,24 +536,54 @@ html,body{
 #sos-voice-hint{font-size:0.67rem;color:rgba(255,255,255,0.4);margin-top:0.35rem;padding-left:4px;display:none}
 @media(max-width:640px){#sm{left:10px;right:10px;top:64px}}
 
-/* ══════ FEEDBACK CARD — anchored bottom-right, non-blocking ══════ */
-#feedbackModal{
+#voice-status{
+  display:flex;align-items:center;gap:0.4rem;
+  font-size:0.72rem;color:var(--muted);margin-top:0.4rem;
+  padding:0.32rem 0.55rem;border-radius:8px;background:rgba(255,255,255,0.04);
+}
+#voice-status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+#voice-status.listening .dot{background:var(--teal);animation:sosP 1s ease-in-out infinite}
+#voice-status.verified .dot{background:#22c55e}
+#voice-status.mismatch .dot{background:var(--red)}
+
+#voiceEnrollModal{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:6000;
+  background:rgba(0,0,0,0.55);align-items:center;justify-content:center;
+}
+#voiceEnrollModal.open{display:flex}
+#voiceEnrollBox{
+  width:320px;max-width:90vw;background:var(--card);border:1.5px solid var(--border);
+  border-radius:16px;padding:1.3rem 1.4rem;text-align:center;box-shadow:0 12px 40px var(--shadow);
+}
+#voiceEnrollBox h3{font-family:var(--font-h);font-size:1rem;color:var(--fg);margin-bottom:0.4rem}
+#voiceEnrollBox p{font-size:0.78rem;color:var(--muted);line-height:1.5;margin-bottom:0.9rem}
+#voiceEnrollMic{
+  width:64px;height:64px;border-radius:50%;margin:0 auto 0.9rem;
+  background:radial-gradient(circle at 35% 35%,#5eead4,#0d9488);
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+#voiceEnrollMic.active{animation:sosP 1s ease-in-out infinite}
+#voiceEnrollProgress{font-size:0.74rem;color:var(--teal);font-weight:700;margin-bottom:0.8rem}
+
+#reviewModal{
   display:none;
   position:fixed;bottom:1.25rem;right:1.25rem;z-index:5001;
-  width:252px;
+  width:270px;
   background:var(--card);
   border:1.5px solid var(--border);
   border-radius:18px;
-  padding:1.15rem 1.25rem;
+  padding:1.1rem 1.2rem;
   box-shadow:0 8px 32px var(--shadow);
   text-align:center;
   animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }
-.stars{display:flex;gap:0.22rem}
-.star{font-size:1.7rem;cursor:pointer;color:var(--muted);transition:all 0.14s;line-height:1}
-.star:hover,.star.lit{color:var(--amber);transform:scale(1.18)}
+#reviewModal .rv-close{position:absolute;top:0.6rem;right:0.7rem;background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;line-height:1;padding:0.2rem}
+#reviewModal .rv-actions{display:flex;gap:0.4rem;margin-top:0.9rem}
+#reviewModal .rv-actions button{flex:1;padding:0.5rem;font-size:0.8rem;border-radius:9px;border:1px solid var(--border);cursor:pointer;font-family:inherit;font-weight:700}
+#reviewModal .rv-yes{background:var(--grad);color:#fff;border:none}
+#reviewModal .rv-no{background:transparent;color:var(--fg)}
+#reviewModal .rv-skip{background:transparent;color:var(--muted);flex:0 0 auto;padding:0.5rem 0.7rem}
 
-/* ══════ TOAST ══════ */
 #toast{
   position:fixed;bottom:1.4rem;left:50%;
   transform:translateX(-50%) translateY(70px);
@@ -626,7 +595,6 @@ html,body{
 }
 #toast.show{transform:translateX(-50%) translateY(0)}
 
-/* ══════ SOS CIRCLE — bottom-centre of map, only when sidebar closed ══════ */
 #sos-circle {
   position: absolute;
   bottom: 2rem;
@@ -645,15 +613,13 @@ html,body{
   letter-spacing: 0.1em;
   cursor: pointer;
   box-shadow: 0 4px 24px rgba(225,29,72,0.55), 0 0 0 0 rgba(225,29,72,0.4);
-  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1),
-              box-shadow 0.2s;
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
   pointer-events: none;
   opacity: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-/* Visible state — added by JS when panel collapses */
 #sos-circle.visible {
   transform: translateX(-50%) scale(1);
   pointer-events: all;
@@ -674,7 +640,6 @@ html,body{
   #sos-circle { bottom: calc(58vh + 1.5rem); }
 }
 
-/* ══════ START NAVIGATION BUTTON ══════ */
 #start-nav-btn {
   display: flex;
   align-items: center;
@@ -716,7 +681,6 @@ html,body{
   100% { left: 125%; }
 }
 
-/* ══════ LOCATE BUTTON (bottom-right of map) ══════ */
 .locate-btn {
   width: 40px; height: 40px;
   background: var(--card);
@@ -745,7 +709,6 @@ html,body{
   100% { box-shadow: 0 0 0 0 var(--teal-glow); }
 }
 
-/* Locate button floating above nav sheet during navigation */
 #nav-locate-btn {
   position: fixed;
   right: 1rem;
@@ -766,9 +729,6 @@ html,body{
 #nav-locate-btn.nav-hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
 #nav-locate-btn:hover { background: var(--teal-glow); border-color: var(--teal); }
 
-
-
-/* ══════ LEAFLET ZOOM — top-left, just below topbar ══════ */
 .leaflet-top.leaflet-left {
   margin-top: 0.6rem;
   margin-left: 0.6rem;
@@ -779,7 +739,6 @@ html,body{
   margin-right: 0.5rem;
 }
 
-/* ══════ MOBILE ══════ */
 #map { touch-action: none; }
 
 @media(max-width:640px){
@@ -796,14 +755,12 @@ html,body{
   }
   #panel::after{top:0;border-radius:20px 20px 0 0}
   #mw{padding-top:calc(56px + env(safe-area-inset-top))}
-  /* Larger touch targets on mobile */
   .btn,.sbt,.lbt,.cat-btn,.nd-mode-btn,.nd-route-item{min-height:44px}
   .nav-btn-sos,.nav-btn-exit{width:70px;height:70px}
   #nstat-time-val{font-size:2.2rem}
   .aci{padding:0.8rem 0.9rem;min-height:52px}
 }
 
-/* ══════ NAVIGATION HUD — unified bottom sheet ══════ */
 #nav-hud {
   display: none;
   position: fixed;
@@ -817,7 +774,6 @@ html,body{
   to   { transform: translateY(0);    opacity: 1; }
 }
 
-/* The whole sheet */
 #nav-sheet {
   background: var(--panel-bg);
   border-top: 1.5px solid var(--border);
@@ -827,7 +783,6 @@ html,body{
   box-shadow: 0 -10px 48px var(--shadow);
   overflow: hidden;
   max-height: 88vh;
-  /* Account for iPhone home bar */
   padding-bottom: env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;
@@ -835,7 +790,6 @@ html,body{
   animation: hudSlideUp 0.44s cubic-bezier(0.34,1.56,0.64,1) forwards;
 }
 
-/* Drag handle */
 #nav-handle {
   flex-shrink: 0;
   padding: 0.65rem 1.1rem 0;
@@ -852,21 +806,18 @@ html,body{
 }
 #nav-sheet:hover #nav-handle::before { background: var(--teal); }
 
-/* ── PEEK — always visible ── */
 #nav-peek {
   flex-shrink: 0;
   padding: 0.7rem 1rem 0.85rem;
   cursor: pointer;
 }
 
-/* One row: big SOS circle | centre stats | big Exit circle */
 #nav-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-/* Big circular SOS button */
 .nav-btn-sos {
   flex-shrink: 0;
   width: 62px; height: 62px;
@@ -893,7 +844,6 @@ html,body{
   50%      { box-shadow: 0 4px 20px rgba(225,29,72,0.55), 0 0 0 10px rgba(225,29,72,0); }
 }
 
-/* Big circular Exit button */
 .nav-btn-exit {
   flex-shrink: 0;
   width: 62px; height: 62px;
@@ -916,7 +866,6 @@ html,body{
 }
 .nav-btn-exit:active { transform: scale(0.94); }
 
-/* Centre stats block */
 #nav-stats-center {
   flex: 1;
   text-align: center;
@@ -939,10 +888,34 @@ html,body{
 }
 .nav-sub-dot { color: var(--border); font-size: 0.9rem; line-height: 1; }
 
-/* Thin divider */
 #nav-peek-div { height: 1px; background: var(--border); flex-shrink: 0; margin: 0 1rem; }
 
-/* ── SCROLL — hidden by default, revealed when .open added ── */
+#nav-quick-row {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.55rem 0.1rem 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+#nav-quick-row::-webkit-scrollbar { display: none; }
+.nav-quick-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--font-b);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.4rem 0.65rem;
+  border-radius: 20px;
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  color: var(--fg2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-quick-btn:hover { border-color: var(--teal); color: var(--teal); }
+.nav-quick-btn.nq-test { border-style: dashed; }
+
 #nav-scroll {
   overflow-y: auto;
   padding: 0 1.1rem;
@@ -960,7 +933,6 @@ html,body{
 #nav-scroll::-webkit-scrollbar { width: 3px; }
 #nav-scroll::-webkit-scrollbar-thumb { background: var(--teal-dark); border-radius: 3px; }
 
-/* Section labels */
 .nd-sl {
   font-size: 0.6rem; font-weight: 700; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.13em;
@@ -972,7 +944,6 @@ html,body{
   background: var(--grad); border-radius: 1px; flex-shrink: 0;
 }
 
-/* Travel mode pills */
 .nd-mode-sw { display: flex; gap: 0.35rem; }
 .nd-mode-btn {
   flex: 1; padding: 0.52rem 0.3rem;
@@ -984,7 +955,6 @@ html,body{
 .nd-mode-btn:hover { border-color: var(--teal); color: var(--teal); }
 .nd-mode-btn.active { background: var(--teal-glow); border-color: var(--teal); color: var(--teal); }
 
-/* Route list */
 .nd-route-list { display: flex; flex-direction: column; gap: 0.35rem; }
 .nd-route-item {
   display: flex; align-items: center; justify-content: space-between;
@@ -1008,77 +978,43 @@ html,body{
   flex-shrink: 0; margin-left: 0.45rem;
 }
 
-/* Divider inside scroll */
 .nd-div { height: 1px; background: var(--border); }
 
-/* Scroll visibility controlled purely via .open class on #nav-scroll */
-
-/* Map layer control buttons on map — colour when active */
 .layer-ctrl-btn { outline: none; }
 .layer-ctrl-btn.heat-on  { background: rgba(245,158,11,0.18) !important; border-color: #f59e0b !important; color: #f59e0b !important; }
 .layer-ctrl-btn.zone-on  { background: rgba(244,63,94,0.15)  !important; border-color: #f43f5e !important; color: #f43f5e  !important; }
 
-
-/* ══════ IPHONE SAFARI SPECIFIC ══════ */
 @supports (-webkit-touch-callout: none) {
-  /* Prevent text size adjustment on rotation */
   html { -webkit-text-size-adjust: 100%; }
-  /* Fix input zoom on focus (Safari zooms when font < 16px) */
   input, select, textarea { font-size: 16px !important; }
-  /* Smooth scrolling in panel */
   #pi { -webkit-overflow-scrolling: touch; }
-  /* Fix tap highlight */
   * { -webkit-tap-highlight-color: transparent; }
 }
 
-/* ══════ ANDROID CHROME SPECIFIC ══════ */
 @media screen and (max-width: 640px) {
-  /* Android Chrome address bar changes height dynamically.
-     Use dvh so layout adjusts when bar shows/hides */
   html, body { height: 100dvh; min-height: 100dvh; }
   #app { height: 100dvh; min-height: 100dvh; }
-
-  /* Fix input zoom — Chrome also zooms if font-size < 16px */
   input, select, textarea { font-size: 16px !important; }
-
-  /* Larger touch targets — Android fingers need more space */
   .btn, .sbt, .lbt, .tbtn, .nd-mode-btn { min-height: 44px; }
   .cat-btn { min-height: 52px; }
   .aci { min-height: 52px; padding: 0.85rem 0.9rem; }
-
-  /* Nav HUD buttons bigger on small screens */
   .nav-btn-sos, .nav-btn-exit { width: 68px; height: 68px; }
-
-  /* Panel inner scroll momentum on Android */
   #pi, #nav-scroll, #nav-drawer-inner {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
-
-  /* Prevent double-tap zoom on buttons */
   button, a { touch-action: manipulation; }
-
-  /* Fix map controls size on small screens */
   .layer-ctrl-btn { width: 40px !important; height: 40px !important; }
   .locate-btn { width: 44px; height: 44px; }
-
-  /* Topbar — tighter on small Android screens */
-  #uchip { display: none; } /* hide welcome chip to save space */
+  #uchip { display: none; }
   .brand-name { font-size: 0.95rem; }
-  #tbadge-date { display: none; } /* hide date on very small screens */
-
-  /* Make route cards easier to tap */
+  #tbadge-date { display: none; }
   .rc { padding: 0.9rem 1rem; }
   .nd-route-item { padding: 0.65rem 0.85rem; min-height: 52px; }
-
-  /* Autocomplete dropdown — full readable size */
   .acd { max-height: 240px; }
-
-  /* SOS banner full width on mobile */
   #sb { max-width: 100%; }
 }
 
-/* Extra small screens (320px wide like iPhone SE / small Androids) */
 @media screen and (max-width: 380px) {
   :root { --panel: 100%; }
   #tbadge-slot-label { display: none; }
@@ -1086,13 +1022,17 @@ html,body{
   .nav-btn-sos, .nav-btn-exit { width: 58px; height: 58px; }
   #nav-stats-sub { font-size: 0.65rem; }
 }
+/* Dark look for keyless OpenStreetMap tiles */
+.sp-osm-dark{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.6)}
 </style>
+  <!-- EmailJS v4 for automatic SOS email alerts -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" crossorigin="anonymous"></script>
+  <script>emailjs.init({ publicKey: 'f3wxAQQr34cXhDnsi' });</script>
+  <!-- Regional language switcher (Hindi, Bengali, Tamil, Telugu, and other Indian state languages) -->
+  <script src="js/i18n.js"></script>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════
-     TOPBAR
-══════════════════════════════════════ -->
 <div id="topbar">
   <a href="#" class="brand">
     <div class="brand-icon">
@@ -1103,7 +1043,6 @@ html,body{
     <div class="brand-name">Safe<span>Path</span></div>
   </a>
 
-  <!-- Time + Slot badge -->
   <div id="tbadge" aria-label="Current time and safety slot">
     <div id="tbadge-slot">
       <span id="tbadge-slot-icon">🌅</span>
@@ -1115,6 +1054,7 @@ html,body{
 
   <div id="tbr">
     <div id="uchip">Welcome, <strong id="ufirst">…</strong></div>
+    <div id="lang-switcher-root"></div>
     <button id="themeBtn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
       <svg id="icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -1126,25 +1066,42 @@ html,body{
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
       </svg>
     </button>
+    <button class="tbtn" id="voiceSetupBtn" onclick="openVoiceEnroll()">🎙️ Voice Safety</button>
     <button class="tbtn" onclick="signOut()">Sign Out</button>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     MAIN LAYOUT
-══════════════════════════════════════ -->
+<div id="voiceEnrollModal">
+  <div id="voiceEnrollBox">
+    <div id="voiceEnrollMic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </div>
+    <h3 id="voiceEnrollTitle">Set Up Voice Safety Check</h3>
+    <p id="voiceEnrollDesc">During an SOS alert, the check-in timer will only reset when it hears <strong>your</strong> voice say "I'm safe" — not just anyone's. We'll record 3 short samples of your voice now (takes ~15 seconds).</p>
+    <div style="text-align:left;margin-top:0.6rem">
+      <label for="voiceEnrollLangSelect" style="font-size:0.72rem;color:var(--muted);display:block;margin-bottom:0.3rem">Language you'll speak in during SOS checks</label>
+      <select id="voiceEnrollLangSelect" onchange="onVoiceEnrollLangChange(this.value)"
+        style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--fg);font-size:0.82rem"></select>
+    </div>
+    <p id="voiceEnrollLangHint" style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;"></p>
+    <div id="voiceEnrollProgress" style="display:none"></div>
+    <div style="display:flex;gap:0.5rem">
+      <button class="btn bt" style="flex:1;padding:0.55rem;font-size:0.82rem" id="voiceEnrollStartBtn" onclick="startVoiceEnrollment()">Start Recording</button>
+      <button class="btn bo" style="flex:1;padding:0.55rem;font-size:0.78rem" onclick="closeVoiceEnroll()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="app">
   <div id="panel">
     <div id="pi">
 
-      <!-- ORS warning -->
       <div id="ow">
         Routing API key required. Get a free key at
         <a href="https://openrouteservice.org/dev/#/signup" target="_blank">openrouteservice.org</a>
         and paste it into dashboard.html line 9.
       </div>
 
-      <!-- Origin -->
       <div>
         <div class="sl">Origin</div>
         <div class="iw-w">
@@ -1162,7 +1119,6 @@ html,body{
 
       <div class="sep"><div class="ln"></div><div class="dt"></div><div class="ln"></div></div>
 
-      <!-- Destination -->
       <div>
         <div class="sl">Destination</div>
         <div class="iw-w">
@@ -1186,13 +1142,10 @@ html,body{
           <div class="cat-grid">
             <button class="cat-btn" onclick="catSearch('station','to',this)"><span class="cat-icon">🚉</span>Station</button>
             <button class="cat-btn" onclick="catSearch('hospital','to',this)"><span class="cat-icon">🏥</span>Hospital</button>
-            <button class="cat-btn" onclick="catSearch('school','to',this)"><span class="cat-icon">🏫</span>School</button>
-            <button class="cat-btn" onclick="catSearch('college','to',this)"><span class="cat-icon">🎓</span>College</button>
             <button class="cat-btn" onclick="catSearch('park','to',this)"><span class="cat-icon">🌳</span>Park</button>
             <button class="cat-btn" onclick="catSearch('bank','to',this)"><span class="cat-icon">🏦</span>Bank</button>
             <button class="cat-btn" onclick="catSearch('beach','to',this)"><span class="cat-icon">🏖️</span>Beach</button>
             <button class="cat-btn" onclick="catSearch('post office','to',this)"><span class="cat-icon">📮</span>Post Office</button>
-            <button class="cat-btn" onclick="catSearch('temple','to',this)"><span class="cat-icon">🛕</span>Temple</button>
             <button class="cat-btn" onclick="catSearch('mall','to',this)"><span class="cat-icon">🛒</span>Mall</button>
             <button class="cat-btn" onclick="catSearch('hotel','to',this)"><span class="cat-icon">🏨</span>Hotel</button>
             <button class="cat-btn" onclick="catSearch('police','to',this)"><span class="cat-icon">👮</span>Police</button>
@@ -1206,7 +1159,6 @@ html,body{
           </div>
         </div>
 
-        <!-- ✅ CHANGE 1: Find Safest Route button moved HERE, directly below destination section -->
         <button class="btn bt" id="bfind" onclick="findRoutes()" style="display:none;margin-top:0.65rem">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><path d="M6 17V7a2 2 0 0 1 2-2h8"/><circle cx="18" cy="5" r="2"/></svg>
           Find Safest Route
@@ -1215,7 +1167,6 @@ html,body{
 
       <div class="hd" id="mode-div-top" style="display:none"></div>
 
-      <!-- Travel mode — hidden until Find Safest Route is tapped -->
       <div id="mode-section" style="display:none">
         <div class="sl">Travel Mode</div>
         <div class="sw" id="mode-sw">
@@ -1227,7 +1178,6 @@ html,body{
 
       <div class="hd" id="mode-div-bottom" style="display:none"></div>
 
-      <!-- Route results -->
       <div id="rsec" style="display:none">
         <div class="sl">Route Options</div>
         <div id="rcards"></div>
@@ -1238,8 +1188,6 @@ html,body{
       </div>
 
       <div class="hd"></div>
-
-      <!-- Emergency -->
       <div>
         <div class="sl">Emergency</div>
         <button class="btn br" onclick="openSOS()">
@@ -1251,7 +1199,6 @@ html,body{
     </div>
   </div>
 
-  <!-- Panel toggle arrow -->
   <div id="panel-toggle" onclick="openPanel()" title="Open sidebar">
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1261,12 +1208,10 @@ html,body{
 
   <div id="mw">
     <div id="map"></div>
-    <!-- SOS circle — only visible when sidebar is collapsed -->
     <button id="sos-circle" onclick="openSOS()">
       <span>SOS</span>
     </button>
 
-    <!-- Locate button floating above nav sheet during navigation -->
     <button id="nav-locate-btn" onclick="centreOnUser()" title="Centre on my location">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1278,9 +1223,6 @@ html,body{
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     SOS BANNER
-══════════════════════════════════════ -->
 <div id="sm">
   <div id="sb">
     <div id="sp">
@@ -1290,49 +1232,46 @@ html,body{
       <div id="sos-title">Emergency Alert Active</div>
       <div id="sst" style="font-size:0.73rem;color:var(--muted);line-height:1.4">Notifying your emergency contact with live location.</div>
       <div id="cs"></div>
-      <div id="sos-actions">
-        <button onclick="confirmSafe()" style="display:inline-flex;align-items:center;gap:0.32rem;background:var(--grad);color:#fff;border:none;border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:700;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> I am Safe
-        </button>
-        <button onclick="closeSOS()" style="display:inline-flex;align-items:center;gap:0.32rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:600;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Dismiss
-        </button>
+      <div id="voice-status">
+        <span class="dot"></span>
+        <span id="voice-status-text">Say "I'm safe" — your voice will be verified</span>
       </div>
+      <div id="sos-actions">
+  <button id="manual-safe-btn" onclick="manualConfirmSafe()" style="display:none;align-items:center;gap:0.32rem;background:var(--grad);color:#fff;border:none;border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:700;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Tap Instead (no voice set up)
+  </button>
+
+  <button onclick="closeSOS()" style="display:inline-flex;align-items:center;gap:0.32rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:600;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel
+  </button>
+</div>
     </div>
   </div>
   <p id="sos-voice-hint"></p>
 </div>
 
-<!-- ══════════════════════════════════════
-     FEEDBACK CARD
-══════════════════════════════════════ -->
-<div id="feedbackModal">
+<div id="reviewModal">
+  <button class="rv-close" onclick="closeReviewModalAttempt()" aria-label="Close">✕</button>
   <div style="height:2.5px;background:var(--grad);border-radius:18px;margin-bottom:1rem"></div>
   <p style="font-family:var(--font-h);font-size:0.98rem;font-weight:700;color:var(--fg);margin-bottom:0.25rem">Journey Complete! 🎉</p>
-  <p style="font-size:0.75rem;color:var(--muted);margin-bottom:0.95rem">How safe did your route feel?</p>
-  <div class="stars" id="feedbackStars" style="justify-content:center;gap:0.4rem;margin-bottom:1rem">
-    <span class="star" onclick="setFeedbackStar(1)">★</span>
-    <span class="star" onclick="setFeedbackStar(2)">★</span>
-    <span class="star" onclick="setFeedbackStar(3)">★</span>
-    <span class="star" onclick="setFeedbackStar(4)">★</span>
-    <span class="star" onclick="setFeedbackStar(5)">★</span>
+  <p style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem">Did this place feel safe just now?</p>
+  <p id="rvPlaceName" style="font-family:var(--font-h);font-size:0.92rem;font-weight:700;color:var(--teal)"></p>
+  <div class="rv-actions">
+    <button class="rv-no" onclick="answerReviewDash('no')">No</button>
+    <button class="rv-yes" onclick="answerReviewDash('yes')">Yes</button>
   </div>
-  <div style="display:flex;gap:0.45rem">
-    <button class="btn bt" style="flex:1;padding:0.52rem;font-size:0.82rem" onclick="submitFeedback()">Submit</button>
-    <button class="btn bo" style="flex:1;padding:0.52rem;font-size:0.78rem" onclick="closeFeedbackModal()">Skip</button>
-  </div>
+  <button class="rv-skip" style="margin-top:0.5rem;background:none;border:none" onclick="answerReviewDash('skip')">Skip review</button>
 </div>
 
 <div id="toast"></div>
 
-<!-- ══════════════════════════════════════
-     SCRIPTS
-══════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
+<!-- UPDATED: Removed firebase-config.js and auth.js — loaded in <head> now -->
 <script src="js/crime-data.js"></script>
+<script src="js/places-fallback.js"></script>
+<script src="js/voice-lang.js"></script>
+<script src="js/voice-auth.js"></script>
 <script src="js/safety-features.js"></script>
 
 <script>
@@ -1360,11 +1299,13 @@ let locMarker     = null;
 let locAccCircle  = null;
 let fromMarker    = null;
 let toMarker      = null;
-let feedbackStarRating = 0;
 let _zoneCache    = null;
 let _zoneCacheSlot= null;
 let _zonesBuiltForSlot = null;
 let _journeyEnded = false;
+let _ratingAdjustments = [];
+let _ratingsFetched = false;
+let _waypointZones = [];    // synthetic risk zones from crowd-sourced waypoint reviews (per time-of-day slot)
 
 const SH = { morning:8, afternoon:13, evening:18, night:22 };
 const SN = { morning:'Morning', afternoon:'Afternoon', evening:'Evening', night:'Night' };
@@ -1378,10 +1319,23 @@ const REMINDER_INTERVAL_MS = 75000;
 const zoneStates     = new Map();
 const reminderTimers = new Map();
 
-const TILES = {
-  dark : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-};
+// Builds the base map layer for the current theme.
+//  • With window.CARTO_API_KEY set  -> CARTO dark/light tiles (with ?key=)
+//  • Without a key                  -> OpenStreetMap tiles (dark mode via CSS filter)
+function makeTileLayer(isLight) {
+  const key = (window.CARTO_API_KEY || '').trim();
+  if (key) {
+    return L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/' + (isLight ? 'light_all' : 'dark_all') + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(key),
+      { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 19 }
+    );
+  }
+  return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    className: isLight ? '' : 'sp-osm-dark'
+  });
+}
 
 // ════════════════════════════════════════
 // INIT
@@ -1398,11 +1352,8 @@ async function initApp() {
     doubleClickZoom: true,
     boxZoom: false,
     tap: true,
-
   }).setView([19.076, 72.8777], 12);
 
-
-  // Locate button
   const LocateControl = L.Control.extend({
     options: { position: 'bottomright' },
     onAdd: function() {
@@ -1422,7 +1373,6 @@ async function initApp() {
   });
   map.addControl(new LocateControl());
 
-  // ── Map Layer toggle control — sits below zoom, above locate ──────────────
   const LayerControl = L.Control.extend({
     options: { position: 'topleft' },
     onAdd: function() {
@@ -1435,7 +1385,6 @@ async function initApp() {
         btn.title = title;
         btn.setAttribute('aria-label', title);
         btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + svgPath + '</svg>';
-        // Set base styles individually so syncBtn can override them cleanly
         btn.style.width          = '36px';
         btn.style.height         = '36px';
         btn.style.borderRadius   = '9px';
@@ -1457,7 +1406,6 @@ async function initApp() {
       const zoneBtn = mkBtn('map-lzone', 'Toggle Risk Zones',
         '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>');
 
-      // syncBtn uses direct style so inline cssText doesn't block it
       function syncBtn(btn, isHeat, on) {
         if (isHeat) {
           btn.style.background  = on ? 'rgba(245,158,11,0.22)' : 'var(--card)';
@@ -1492,23 +1440,38 @@ async function initApp() {
   map.addControl(new LayerControl());
 
   const isLight = document.documentElement.classList.contains('light');
-  tileLayer = L.tileLayer(isLight ? TILES.light : TILES.dark, {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-    subdomains:'abcd', maxZoom:19
-  }).addTo(map);
+  tileLayer = makeTileLayer(isLight).addTo(map);
 
-  crimeZones = await getCrimeZones();
-  buildHeat();
-  buildZones();
+crimeZones = await getCrimeZones();
+buildHeat();
+buildZones();
+fetchRatingAdjustments();
 
+  // UPDATED: Supabase auth — .id instead of .uid, fetch profile from public.users table
   onAuthStateChanged(async user => {
-    if (!user) { window.location.href = 'index.html'; return; }
+    if (!user) {
+      if (!sessionStorage.getItem('signing_out')) {
+        window.location.href = 'index.html';
+      }
+      return;
+    }
+
     curUser = user;
     try {
-      const d = await db.collection('users').doc(user.uid).get();
-      if (d.exists)
-        document.getElementById('ufirst').textContent = d.data().name.split(' ')[0];
-    } catch(e) {}
+      const { data } = await window.supabase
+        .from('users')
+        .select('name')
+        .eq('auth_id', user.id)
+        .single();
+      if (data && data.name) {
+        // Decrypt name before displaying
+        const key = await getCryptoKey(user.id);
+        const decryptedName = await decryptText(data.name, key);
+        document.getElementById('ufirst').textContent = decryptedName.split(' ')[0];
+      }
+    } catch(e) {
+      console.warn('Could not load user profile:', e);
+    }
   });
 }
 
@@ -1587,7 +1550,7 @@ function buildHeat() {
 function toggleHeat() {
   heatOn = !heatOn;
   heatOn ? heatLayer.addTo(map) : map.removeLayer(heatLayer);
-  document.getElementById('lheat').classList.toggle('on', heatOn);
+  document.getElementById('lheat') && document.getElementById('lheat').classList.toggle('on', heatOn);
 }
 
 // ════════════════════════════════════════
@@ -1628,21 +1591,68 @@ function buildZones() {
 function toggleZones() {
   zonesOn = !zonesOn;
   zoneMarkers.forEach(m => zonesOn ? m.addTo(map) : map.removeLayer(m));
-  document.getElementById('lzone').classList.toggle('on', zonesOn);
+  document.getElementById('lzone') && document.getElementById('lzone').classList.toggle('on', zonesOn);
 }
 
 // ════════════════════════════════════════
 // ZONE RISK CACHE
 // ════════════════════════════════════════
+async function fetchRatingAdjustments() {
+  try {
+    const { data, error } = await window.supabase
+      .rpc('get_area_risk_adjustments');
+    if (error) throw error;
+    _ratingAdjustments = data || [];
+    _ratingsFetched = true;
+    console.log('Rating adjustments loaded:', _ratingAdjustments.length);
+  } catch(e) {
+    console.warn('Could not fetch rating adjustments:', e);
+    _ratingsFetched = true;
+  }
+  // Per-waypoint reviews (individual stops/localities along a journey — see
+  // waypoint_ratings / get_waypoint_risk_zones in supabase/migrations). Optional:
+  // requires that migration to be run, so a missing function fails silently.
+  try {
+    const { data, error } = await window.supabase.rpc('get_waypoint_risk_zones');
+    if (error) throw error;
+    _waypointZones = data || [];
+    console.log('Waypoint risk zones loaded:', _waypointZones.length);
+  } catch (e) {
+    _waypointZones = [];
+  }
+  _zoneCache = null;
+  if (crimeZones.length) { buildHeat(); buildZones(); }
+}
+
 function buildZoneCache(h) {
   const slot = getTimeSlot(h);
   if (_zoneCache && _zoneCacheSlot === slot) return _zoneCache;
   const mult = TIME_MULTIPLIERS[slot];
   _zoneCache = crimeZones.map(z => {
     let base = z.baseRisk;
-    if ((slot === 'night' || slot === 'evening') && z.nightOverride) base = z.nightOverride;
-    return { lat:z.lat, lng:z.lng, r:z.radius||200, risk:base*mult };
+    if ((slot === 'night' || slot === 'evening') && z.nightOverride)
+      base = z.nightOverride;
+    let adjustedRisk = base * mult;
+    if (_ratingsFetched && _ratingAdjustments.length) {
+  for (const adj of _ratingAdjustments) {
+    const dist = getDistance(z.lat, z.lng, adj.lat, adj.lng);
+    if (dist < 500 && adj.rating_count >= 5) {
+      adjustedRisk = Math.max(1, Math.min(10, adjustedRisk + adj.risk_adjustment));
+      break;
+    }
+  }
+}
+    return { lat:z.lat, lng:z.lng, r:z.radius||200, risk:adjustedRisk };
   });
+  // Add any well-supported waypoint reviews for THIS time-of-day slot as their own
+  // small risk zones — a place reviewed unsafe only stays a risk during the hours
+  // people actually reported feeling unsafe, not around the clock.
+  if (_waypointZones.length) {
+    for (const z of _waypointZones) {
+      if (z.time_slot !== slot) continue;
+      _zoneCache.push({ lat: z.lat, lng: z.lng, r: z.radius || 180, risk: z.risk });
+    }
+  }
   _zoneCacheSlot = slot;
   return _zoneCache;
 }
@@ -1698,22 +1708,18 @@ function setMode(el) {
   }
 }
 
-// Safe route refetch that works both during and outside navigation
 async function refetchRoutes() {
   const wasTracking = trackingOn;
   const wasNav      = _navMode;
-  const prevSelIdx  = selIdx; // remember which route type was selected
+  const prevSelIdx  = selIdx;
   trackingOn = false;
   _navMode   = false;
   try {
     await findRoutes();
-    // Restore previously selected route index (findRoutes resets to 0)
-    // clamp to available routes
     selIdx = Math.min(prevSelIdx, curRoutes.length - 1);
     trackingOn = wasTracking;
     _navMode   = wasNav;
     if (wasNav) {
-      // Re-hide non-selected, show only selected route
       routeLayers.forEach((l, i) => {
         if (!l) return;
         if (i !== selIdx) {
@@ -1722,7 +1728,6 @@ async function refetchRoutes() {
           if (!map.hasLayer(l)) map.addLayer(l);
           l.setStyle({ opacity: 0.9, weight: 6 });
           l.bringToFront();
-          // Repin to current GPS position
           if (fromCoords) {
             const ll = l.getLatLngs();
             if (ll && ll.length > 1)
@@ -1748,13 +1753,11 @@ async function findRoutes() {
   if (!fromCoords) { showToast('Select a starting point first'); return; }
   if (!toCoords)   { showToast('Select a destination first'); return; }
   if (window.ORS_API_KEY === 'YOUR_ORS_API_KEY') { showToast('Add your ORS API key first'); return; }
-  // trackingOn check removed — ndSetMode manages nav state during reroute
 
   const btn = document.getElementById('bfind');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Analysing routes…';
 
-  // Reveal Travel Mode section now that user has tapped Find Safest Route
   document.getElementById('mode-section').style.display = 'block';
   document.getElementById('mode-div-top').style.display = 'block';
   document.getElementById('mode-div-bottom').style.display = 'block';
@@ -1900,17 +1903,8 @@ async function findRoutes() {
     const WGT = [6, 4, 3];
     const OPC = [0.9, 0.5, 0.25];
 
-    // ── Route drawing + marker placement ─────────────────────────────────────
-    // Strategy:
-    //  1. Each polyline starts at fromCoords and ends at toCoords exactly.
-    //  2. We keep the full ORS interior coords for road accuracy.
-    //  3. Markers sit at fromCoords / toCoords so they always touch the line.
-    //  This is the only way to guarantee visual connection regardless of how
-    //  far ORS snaps the waypoint from the searched location.
-
     [...visible].reverse().forEach((sr, ri) => {
       const rank = visible.length - 1 - ri;
-      // Build latlng array: exact origin → ORS interior → exact destination
       const interior = sr.coords.slice(1, -1).map(c => [c[1], c[0]]);
       const ll = [fromCoords, ...interior, toCoords];
       const layer = L.polyline(ll, {
@@ -1933,7 +1927,6 @@ async function findRoutes() {
       html:'<div style="background:'+clr+';border:3px solid #fff;border-radius:50% 50% 50% 0;width:17px;height:17px;transform:rotate(-45deg);box-shadow:0 2px 8px '+clr+'99"></div>',
       iconSize:[17,17], iconAnchor:[8,17], popupAnchor:[0,-20]
     });
-    // Markers at exact searched coords — polylines are pinned here too
     fromMarker = L.marker(fromCoords, { icon:mkIcon('#2dd4bf'), zIndexOffset:1000 })
       .addTo(map).bindPopup("<b style=\"font-family:'Playfair Display',serif\">🚩 Start</b>");
     toMarker   = L.marker(toCoords,   { icon:mkIcon('#c084fc'), zIndexOffset:1000 })
@@ -1941,15 +1934,13 @@ async function findRoutes() {
 
     renderCards(visible);
     document.getElementById('rsec').style.display = 'block';
-    selIdx = 0; // default to safest — overridden below if user had a selection
+    selIdx = 0;
 
-    // Hide the Find Safest Route button — Start Navigation is now the CTA
     btn.style.display = 'none';
     btn.disabled = false;
     btn.innerHTML =
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><path d="M6 17V7a2 2 0 0 1 2-2h8"/><circle cx="18" cy="5" r="2"/></svg> Find Safest Route';
 
-    // Scroll panel to route results
     setTimeout(() => {
       const rsec = document.getElementById('rsec');
       if (rsec) rsec.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -2031,9 +2022,7 @@ function selectRoute(rank) {
     l.setStyle({ opacity:i===rank?0.95:0.15, weight:i===rank?7:3, color:CLR[i]||'#6b7280' });
     if (i===rank) l.bringToFront();
   });
-  // Zoom map to show the full selected route immediately
   if (routeLayers[rank]) {
-    // Use paddingBottomRight to keep route above the HUD sheet
     const hudH = (document.getElementById('nav-hud') || {}).offsetHeight || 0;
     const br   = hudH > 0 ? hudH + 20 : 52;
     map.flyToBounds(routeLayers[rank].getBounds(), {
@@ -2056,10 +2045,23 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
 
   acT = setTimeout(async () => {
     try {
-      const userLat = fromCoords ? fromCoords[0] : 19.076;
-      const userLng = fromCoords ? fromCoords[1] : 72.877;
+      // "Nearby" must be near WHERE THE PERSON IS. This used to fall back to a fixed point in
+      // central Mumbai (19.076, 72.877) whenever no start location was set, which is why results
+      // were often 10+ km away. Use the device's real GPS (cached briefly) and only fall back
+      // to central Mumbai if location is denied/unavailable.
+      let userLat = 19.076, userLng = 72.877;
+      if (fromCoords) { userLat = fromCoords[0]; userLng = fromCoords[1]; }
+      else if (nearbyMode || forceCategory) {
+        const g = window._gpsFix;
+        if (g && Date.now() - g.t < 90000) { userLat = g.lat; userLng = g.lng; }
+        else {
+          const pos = await new Promise(res => navigator.geolocation
+            ? navigator.geolocation.getCurrentPosition(p => res(p), () => res(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 })
+            : res(null));
+          if (pos) { userLat = pos.coords.latitude; userLng = pos.coords.longitude; window._gpsFix = { lat: userLat, lng: userLng, t: Date.now() }; }
+        }
+      }
 
-      // ── ICON MAP ──────────────────────────────────────────────────────────
       const CAT_ICONS = {
         station:'🚉', hospital:'🏥', school:'🏫', college:'🎓',
         park:'🌳', bank:'🏦', beach:'🏖️', 'post office':'📮',
@@ -2117,59 +2119,109 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
         dd.style.display='block';
       }
 
-      // ══════════════════════════════════════════════════════════════════════
-      // NEARBY / CATEGORY MODE — Overpass API (proper CORS, works on mobile)
-      // ══════════════════════════════════════════════════════════════════════
       if (nearbyMode && forceCategory) {
         const tagMap = {
-          'station':     '["railway"~"station|halt"]',
-          'hospital':    '["amenity"="hospital"]',
-          'school':      '["amenity"="school"]',
-          'college':     '["amenity"~"college|university"]',
-          'park':        '["leisure"="park"]',
-          'bank':        '["amenity"="bank"]',
-          'beach':       '["natural"="beach"]',
-          'post office': '["amenity"="post_office"]',
-          'temple':      '["amenity"="place_of_worship"]',
-          'mall':        '["shop"~"mall|supermarket"]',
-          'hotel':       '["tourism"~"hotel|guest_house"]',
-          'police':      '["amenity"="police"]',
-          'pharmacy':    '["amenity"="pharmacy"]',
-          'atm':         '["amenity"="atm"]',
-          'restaurant':  '["amenity"~"restaurant|cafe|fast_food"]',
+          // "station" includes metro/subway stations alongside railway stations/halts —
+          // two tag filters unioned together — so the search surfaces both, not just
+          // suburban rail.
+          'station':     ['["railway"~"station|halt"]', '["station"="subway"]', '["railway"="subway_entrance"]'],
+          'hospital':    ['["amenity"="hospital"]'],
+          'park':        ['["leisure"="park"]'],
+          'bank':        ['["amenity"="bank"]'],
+          'beach':       ['["natural"="beach"]'],
+          'post office': ['["amenity"="post_office"]'],
+          'mall':        ['["shop"~"mall|supermarket"]'],
+          'hotel':       ['["tourism"~"hotel|guest_house"]'],
+          'police':      ['["amenity"="police"]'],
+          'pharmacy':    ['["amenity"="pharmacy"]'],
+          'atm':         ['["amenity"="atm"]'],
+          'restaurant':  ['["amenity"~"restaurant|cafe|fast_food"]'],
         };
-        const tag = tagMap[forceCategory];
-        if (!tag) { dd.style.display='none'; return; }
+        const tags = tagMap[forceCategory];
+        if (!tags) { dd.style.display='none'; return; }
 
-        // Use two Overpass mirrors for reliability
-        const radius = 5000;
-        const query = `[out:json][timeout:15];(node${tag}(around:${radius},${userLat},${userLng});way${tag}(around:${radius},${userLat},${userLng});relation${tag}(around:${radius},${userLat},${userLng}););out center tags 30;`;
+        const buildQuery = radius => {
+          const clauses = tags.map(tag =>
+            `node${tag}(around:${radius},${userLat},${userLng});way${tag}(around:${radius},${userLat},${userLng});relation${tag}(around:${radius},${userLat},${userLng});`
+          ).join('');
+          return `[out:json][timeout:15];(${clauses});out center tags 80;`;
+        };
+
         const mirrors = [
           'https://overpass-api.de/api/interpreter',
           'https://overpass.kumi.systems/api/interpreter',
           'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+          'https://overpass.private.coffee/api/interpreter',
         ];
-
-        let elements = [];
-        for (const mirror of mirrors) {
+        const attempt = async (mirror, query, timeoutMs) => {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), timeoutMs);
           try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 15000);
             const r = await fetch(mirror, {
               method: 'POST',
               body: 'data=' + encodeURIComponent(query),
               signal: ctrl.signal
             });
-            clearTimeout(t);
-            if (!r.ok) continue;
+            if (!r.ok) throw new Error('bad status');
             const d = await r.json();
-            elements = d.elements || [];
-            if (elements.length) break;
-          } catch { continue; }
+            const els = d.elements || [];
+            if (!els.length) throw new Error('empty'); // let a mirror with real data win the race
+            return els;
+          } finally { clearTimeout(t); }
+        };
+        // Races every mirror at once instead of trying one after another (cuts the worst
+        // case from ~45s sequential down to a few seconds), then — only if that whole
+        // race comes up empty — widens the search radius and tries again once, and
+        // finally gives one slower single-mirror attempt a longer timeout before
+        // actually telling the user nothing was found. This is what fixes the
+        // "sometimes nothing shows up" cases: a transiently slow network no longer
+        // looks identical to "there's really nothing nearby".
+        const raceAllMirrors = (query, timeoutMs) =>
+          Promise.any(mirrors.map(m => attempt(m, query, timeoutMs))).catch(() => null);
+
+        // Cache results per category+rounded-location so reopening the same category
+        // (or toggling it) doesn't re-hit the network. Places don't move, so a longer
+        // 10-minute window is safe and turns most repeat opens into an instant,
+        // no-network response instead of a multi-second wait every time.
+        window._nearbyCache = window._nearbyCache || new Map();
+        const cacheKey = forceCategory + '|' + userLat.toFixed(2) + ',' + userLng.toFixed(2);
+        const cached = window._nearbyCache.get(cacheKey);
+        let elements = [];
+        const FRESH_MS = 10 * 60 * 1000;
+        const STALE_MS = 60 * 60 * 1000; // still shown instantly, refreshed quietly in the background
+
+        // Nearest-first: the old single 5 km query returned an arbitrary 30 places (Overpass
+        // orders by ID, not distance), so genuinely close ones were often cut off and only far
+        // ones showed. Now small and medium rings run in parallel and the SMALLEST ring that has
+        // results wins, so you get the closest places fast; a wide 15 km ring is only tried if
+        // both come back empty. Results are then sorted by real distance below.
+        const fetchFresh = async () => {
+          // Backup source (Photon/Nominatim) starts at the same time as the main map query, so if
+          // the main servers are slow or down the list still fills in instead of coming back empty.
+          const backup = (typeof spFallbackPlaces === 'function') ? spFallbackPlaces(forceCategory, userLat, userLng, 30).catch(() => []) : Promise.resolve([]);
+          const rings = [2000, 6000].map(r => raceAllMirrors(buildQuery(r), 7000));
+          for (const p of rings) { const els = await p; if (els && els.length) return els; }
+          // Main servers gave nothing close — combine the backup with a wide main-server ring
+          // and let the distance sort below put the truly nearest first.
+          const [bk, wide] = await Promise.all([backup, raceAllMirrors(buildQuery(15000), 9000)]);
+          let els = [...(wide || []), ...bk];
+          if (!els.length) els = (await attempt(mirrors[0], buildQuery(15000), 12000).catch(() => null)) || [];
+          return els || [];
+        };
+
+        if (cached && Date.now() - cached.t < FRESH_MS) {
+          elements = cached.elements;
+        } else if (cached && Date.now() - cached.t < STALE_MS) {
+          // Stale-while-revalidate: show what we have instantly, refresh quietly for next time.
+          elements = cached.elements;
+          fetchFresh().then(fresh => { if (fresh.length) window._nearbyCache.set(cacheKey, { elements: fresh, t: Date.now() }); });
+        } else {
+          elements = await fetchFresh();
+          if (elements.length) window._nearbyCache.set(cacheKey, { elements, t: Date.now() });
         }
 
         if (!elements.length) {
-          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No '+forceCategory+' found nearby. Try increasing range.</div>';
+          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No '+forceCategory+' found nearby.</div>';
           dd.style.display='block'; return;
         }
 
@@ -2187,7 +2239,6 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
           })
           .filter(Boolean);
 
-        // Sort by distance
         items.sort((a,b) => {
           const da = getDistance(userLat,userLng,parseFloat(a.lat),parseFloat(a.lon));
           const db = getDistance(userLat,userLng,parseFloat(b.lat),parseFloat(b.lon));
@@ -2198,16 +2249,11 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
         return;
       }
 
-      // ══════════════════════════════════════════════════════════════════════
-      // TEXT SEARCH MODE
-      // Try multiple APIs in order — first one that returns results wins
-      // ══════════════════════════════════════════════════════════════════════
       const searchQ = q || '';
       if (searchQ.length < 2) { dd.style.display='none'; return; }
 
       let items = [];
 
-      // ── API 1: Photon (Komoot) — proper CORS, no API key, very reliable ──
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 8000);
@@ -2220,7 +2266,6 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
           const seenKeys = new Set();
           for (const f of features) {
             const p = f.properties || {};
-            // Only Mumbai results
             if (p.country !== 'India') continue;
             const coords = f.geometry?.coordinates;
             if (!coords) continue;
@@ -2240,7 +2285,6 @@ async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
         }
       } catch(e) { console.warn('Photon failed:', e); }
 
-      // ── API 2: Nominatim direct — fallback ───────────────────────────────
       if (!items.length) {
         const nominatimUrls = [
           `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ+' Mumbai')}&format=json&limit=10&countrycodes=in&addressdetails=1&dedupe=1`,
@@ -2309,7 +2353,6 @@ function catSearch(category, field, btn) {
   acSearch('',field,category,true);
 }
 
-// Stores the emoji of the selected destination category
 let _destEmoji = '📍';
 
 function pickPlace(field, lat, lon, label, emoji) {
@@ -2339,9 +2382,7 @@ function pickPlace(field, lat, lon, label, emoji) {
       .addTo(map)
       .bindPopup("<b style=\"font-family:'Playfair Display',serif\">🏁 " + label.split(',')[0] + '</b>')
       .openPopup();
-    // Show clear button
     updateToClear();
-    // Show Find Safest Route button
     const bfind = document.getElementById('bfind');
     bfind.style.display = 'flex';
     setTimeout(() => bfind.scrollIntoView({ behavior:'smooth', block:'nearest' }), 100);
@@ -2373,7 +2414,6 @@ function clearDestination() {
   document.getElementById('ac-to').style.display = 'none';
 }
 
-
 document.addEventListener('click', e => {
   if (!e.target.closest('.iw-w'))
     document.querySelectorAll('.acd').forEach(d=>d.style.display='none');
@@ -2387,7 +2427,6 @@ const LOC_ICON_HTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
 function centreOnUser() {
   if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
   const btn = document.querySelector('.locate-btn');
-  const navBtn = document.getElementById('nav-locate-btn');
   if (btn) btn.classList.add('locating');
 
   function applyPos(lat, lng, acc) {
@@ -2396,18 +2435,15 @@ function centreOnUser() {
     placeLocationMarker(lat, lng, acc);
     fromCoords = [lat, lng];
     if (btn) btn.classList.remove('locating');
-    // Re-enable follow after manual centre
     if (_navMode) _navFollowMode = true;
   }
 
-  // Step 1: use any cached position instantly (feels responsive)
   navigator.geolocation.getCurrentPosition(
     pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
     () => { if (btn) btn.classList.remove('locating'); showToast('Could not get location'); },
     { enableHighAccuracy: false, timeout: 2000, maximumAge: 10000 }
   );
 
-  // Step 2: also get accurate fix in background and refine if different
   navigator.geolocation.getCurrentPosition(
     pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
     () => {},
@@ -2425,7 +2461,6 @@ function placeLocationMarker(lat, lng, accuracy, heading) {
 
   let iconHtml, iconSize, iconAnchor;
   if (_navMode && heading !== null && heading !== undefined) {
-    // Navigation — directional arrow pointing in compass direction
     iconHtml = '<div class="nav-arrow-wrap">'
       + '<div class="nav-arrow-ring"></div>'
       + '<div class="nav-arrow" style="transform:rotate('+heading+'deg)"></div>'
@@ -2433,7 +2468,6 @@ function placeLocationMarker(lat, lng, accuracy, heading) {
     iconSize   = [36, 36];
     iconAnchor = [18, 18];
   } else {
-    // Default — pulsing dot
     iconHtml   = '<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>';
     iconSize   = [20, 20];
     iconAnchor = [10, 10];
@@ -2512,15 +2546,9 @@ function useMyLocation() {
 // ════════════════════════════════════════
 // REVERSE GEOCODE
 // ════════════════════════════════════════
-// 150m dead-band around exact station longitude — only truly on-platform
-// addresses say "Near Station". Everything else gets correct East/West.
 const BORDER_METRES = 150;
 
-// Western Railway line longitude for each band — used to split East/West.
-// These are the track longitude at each suburban band (not station building).
-// The track is the authoritative east/west divider, not the station building.
 const MUMBAI_SUBURBS = [
-  // Western line — track longitude at each latitude band
   [19.210, 19.260, 'Borivali',    72.8561],
   [19.185, 19.210, 'Kandivali',   72.8551],
   [19.163, 19.185, 'Malad',       72.8475],
@@ -2532,12 +2560,10 @@ const MUMBAI_SUBURBS = [
   [19.052, 19.065, 'Khar',        72.8355],
   [19.038, 19.052, 'Bandra',      72.8410],
   [19.018, 19.038, 'Dadar',       72.8431],
-  // Central line — east-side suburbs only (no West split)
   [19.060, 19.090, 'Kurla',       72.8826],
   [19.100, 19.130, 'Vikhroli',    72.9250],
   [19.130, 19.165, 'Bhandup',     72.9290],
   [19.165, 19.200, 'Mulund',      72.9560],
-  // South Mumbai — no East/West
   [18.990, 19.018, 'Prabhadevi',  null],
   [18.975, 18.990, 'Worli',       null],
   [18.955, 18.975, 'Tardeo',      null],
@@ -2713,78 +2739,433 @@ function getDistance(lat1,lon1,lat2,lon2){
 }
 
 // ════════════════════════════════════════
-// SOS
+// VOICE ENROLLMENT
 // ════════════════════════════════════════
-function openSOS() {
-  document.getElementById('sm').classList.add('open');
-  document.getElementById('sos-voice-hint').style.display='block';
-  document.getElementById('sos-voice-hint').textContent='Voice check-in active — say "safe" or "ok" every 5 minutes.';
+function openVoiceEnroll() {
+  document.getElementById('voiceEnrollModal').classList.add('open');
+  document.getElementById('voiceEnrollTitle').textContent = 'Set Up Voice Safety Check';
+  document.getElementById('voiceEnrollDesc').style.display = 'block';
+  document.getElementById('voiceEnrollProgress').style.display = 'none';
+  document.getElementById('voiceEnrollStartBtn').style.display = 'inline-flex';
+  document.getElementById('voiceEnrollStartBtn').disabled = false;
+  document.getElementById('voiceEnrollMic').classList.remove('active');
 
-  navigator.geolocation&&navigator.geolocation.getCurrentPosition(async pos=>{
-    if (!curUser) return;
-    try {
-      const r=await triggerEmergencyAlert(curUser.uid,pos.coords.latitude,pos.coords.longitude);
-      if (r.success) activeAlertId=r.alertId;
-    } catch(e){}
+  populateVoiceEnrollLangSelect();
+  updateVoiceEnrollLangHint();
+}
+
+// Fills the "Language you'll speak in" dropdown from VOICE_LANG_MAP,
+// pre-selecting whatever's already saved (or the UI language as default).
+function populateVoiceEnrollLangSelect() {
+  const select = document.getElementById('voiceEnrollLangSelect');
+  if (!select || typeof VOICE_LANG_MAP === 'undefined') return;
+
+  const current = (typeof getVoiceLangCode === 'function') ? getVoiceLangCode() : 'en';
+  select.innerHTML = '';
+  Object.keys(VOICE_LANG_MAP).forEach(code => {
+    const cfg = VOICE_LANG_MAP[code];
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = cfg.speechSupported ? cfg.label : `${cfg.label} (limited support)`;
+    if (code === current) opt.selected = true;
+    select.appendChild(opt);
   });
+}
 
-  if (typeof VoiceCheckIn !== 'undefined') {
-    voiceChecker=new VoiceCheckIn(
-      (t,n)=>{ const e=document.getElementById('cs'); e.style.display='block'; e.textContent='Check-in #'+n+': "'+t+'"'; },
-      (t,n)=>{ document.getElementById('sst').textContent='Check-in #'+n+': unsafe response.'; },
-      (n)=>{ const e=document.getElementById('cs'); e.style.display='block'; e.textContent='Check-in #'+n+': tap "I am Safe" if okay.'; }
-    );
-    voiceChecker.start(5);
+function onVoiceEnrollLangChange(code) {
+  if (typeof setVoiceLangCode === 'function') setVoiceLangCode(code);
+  updateVoiceEnrollLangHint();
+}
+
+function updateVoiceEnrollLangHint() {
+  const hint = document.getElementById('voiceEnrollLangHint');
+  if (hint && typeof getVoiceLangConfig === 'function') {
+    const cfg = getVoiceLangConfig();
+    hint.textContent = cfg.speechSupported
+      ? `We'll listen for your spoken safe-word in ${cfg.label}.`
+      : `Your browser can't reliably transcribe ${cfg.label} speech yet — please say "safe" or "I'm safe" in English or Hindi during SOS checks, even though the app is set to ${cfg.label}.`;
   }
 }
 
-async function confirmSafe() {
-  if (voiceChecker) voiceChecker.stop();
-  if (activeAlertId) {
-    try { await resolveEmergencyAlert(activeAlertId); } catch(e){}
-  }
-  activeAlertId=null;
-  document.getElementById('sm').classList.remove('open');
-  document.getElementById('cs').style.display='none';
-  document.getElementById('sos-voice-hint').style.display='none';
-  showToast('Alert resolved. Stay safe.');
+function closeVoiceEnroll() {
+  document.getElementById('voiceEnrollModal').classList.remove('open');
 }
 
-function closeSOS() {
+async function startVoiceEnrollment() {
+  if (!curUser) { showToast('Please sign in again to set up voice safety.'); return; }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Your browser does not support microphone access.');
+    return;
+  }
+
+  const startBtn  = document.getElementById('voiceEnrollStartBtn');
+  const progress  = document.getElementById('voiceEnrollProgress');
+  const mic       = document.getElementById('voiceEnrollMic');
+  const desc      = document.getElementById('voiceEnrollDesc');
+
+  startBtn.disabled = true;
+  startBtn.textContent = 'Recording…';
+  progress.style.display = 'block';
+  const vcfg = (typeof getVoiceLangConfig === 'function') ? getVoiceLangConfig() : null;
+  const examplePhrase = (vcfg && vcfg.safeWords && vcfg.safeWords[0]) ? vcfg.safeWords[0] : 'I am safe';
+  desc.textContent = `Say a short phrase like "${examplePhrase}" clearly, in a quiet spot, each time you're prompted.`;
+  mic.classList.add('active');
+
+  try {
+    await enrollUserVoice(curUser.id, (step, total) => {
+      progress.textContent = `Sample ${step} of ${total}… speak now`;
+    });
+    mic.classList.remove('active');
+    document.getElementById('voiceEnrollTitle').textContent = '✅ Voice Safety Ready';
+    desc.textContent = 'Your voiceprint is saved and encrypted. During SOS, the timer will only reset when it hears your voice.';
+    progress.style.display = 'none';
+    startBtn.style.display = 'none';
+    showToast('✅ Voice safety check enabled!');
+  } catch (e) {
+    console.error('Voice enrollment failed:', e);
+    mic.classList.remove('active');
+    progress.style.display = 'none';
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try Again';
+    const msg = (e && e.name === 'NotAllowedError')
+      ? 'Microphone access was blocked — allow it in your browser settings and try again.'
+      : (e && e.message) || 'Something went wrong recording your voice — please try again.';
+    desc.textContent = msg;
+    showToast('⚠️ Voice enrollment failed');
+  }
+}
+
+// ════════════════════════════════════════
+// SOS — with 15 second countdown before first alert
+// ════════════════════════════════════════
+let _sosInterval   = null;
+let _sosCountdown  = null;
+let _sosCheckCount = 0;
+let _sosActive     = false;
+let _countdownSecs = 15;
+
+let _lastVoiceScore = null;
+let _sosVoiceMismatchStreak = 0;
+let _alertFiredThisSession = false;
+
+async function openSOS() {
+  if (_sosActive) return;
+  _sosActive = true;
+  _alertFiredThisSession = false;
+
+  document.getElementById('sm').classList.add('open');
+  document.getElementById('cs').style.display = 'none';
+  document.getElementById('cs').style.color   = '';
+
+  // Decide whether we can use voice verification for this session
+  const manualBtn = document.getElementById('manual-safe-btn');
+  const vsEl = document.getElementById('voice-status');
+  let voiceReady = false;
+  if (curUser) {
+    try { voiceReady = await hasVoiceProfile(curUser.id); } catch(e) { voiceReady = false; }
+  }
+  if (voiceReady) {
+    manualBtn.style.display = 'none';
+    vsEl.style.display = 'flex';
+    _sosVoiceMismatchStreak = 0;
+
+    // Recognise in whatever language the voice profile was actually enrolled in —
+    // not just whatever this particular device/browser happens to have saved
+    // locally — so switching devices doesn't silently break voice matching.
+    try {
+      const enrolledLang = await getVoiceProfileLanguage(curUser.id);
+      if (enrolledLang && typeof setVoiceLangCode === 'function') setVoiceLangCode(enrolledLang);
+    } catch (e) { /* best-effort */ }
+
+    voiceChecker = new VoiceVerifiedCheckIn(curUser.id, {
+      onVerified: (transcript, score) => { _lastVoiceScore = score; _sosVoiceMismatchStreak = 0; setVoiceStatus('verified', '✅ Voice verified — resetting timer'); confirmSafe(); },
+      onMismatch: (transcript, score) => {
+        _lastVoiceScore = score; _sosVoiceMismatchStreak++;
+        // A real voice under stress (out of breath, whispering, crying) can keep
+        // missing the lightweight client-side voiceprint match even though the
+        // right safe-word was heard every time. After a couple of misses in a
+        // row, surface the manual "Tap Instead" fallback rather than silently
+        // leaving the user stuck with no way to confirm they're OK.
+        if (_sosVoiceMismatchStreak >= 2) {
+          manualBtn.style.display = 'inline-flex';
+          setVoiceStatus('mismatch', "⚠️ Still not matching your voice — tap below to confirm you're safe");
+        } else {
+          setVoiceStatus('mismatch', "⚠️ That didn't sound like you — timer keeps running");
+        }
+      },
+      onNoProfile: () => { setVoiceStatus('', 'Voice not set up — tap below to confirm'); manualBtn.style.display = 'inline-flex'; },
+      onNoSpeech: () => { setVoiceStatus('listening', 'Say "I\'m safe" — your voice will be verified'); }
+    });
+  } else {
+    // No voiceprint enrolled yet — fall back to the manual tap so safety isn't blocked
+    manualBtn.style.display = 'inline-flex';
+    vsEl.style.display = 'none';
+  }
+
+  // Start 15 second countdown before sending first alert
+  startCountdown(voiceReady);
+}
+
+function setVoiceStatus(state, text) {
+  const el = document.getElementById('voice-status');
+  el.className = state || '';
+  document.getElementById('voice-status-text').textContent = text;
+}
+
+function startCountdown(voiceReady) {
+  _countdownSecs = 15;
+  updateCountdownUI();
+
+  if (navigator.vibrate) navigator.vibrate(200);
+
+  if (voiceReady && voiceChecker) {
+    setVoiceStatus('listening', 'Say "I\'m safe" — your voice will be verified');
+    console.log('[VOICE] starting listenOnce for this 15s cycle');
+    voiceChecker.listenOnce(_countdownSecs * 1000 - 500);
+  }
+
+  _sosCountdown = setInterval(() => {
+    _countdownSecs--;
+    updateCountdownUI();
+
+    if (_countdownSecs <= 0) {
+      clearInterval(_sosCountdown);
+      _sosCountdown = null;
+      if (voiceChecker) voiceChecker.stop();
+      fireAlert(voiceReady);
+    }
+  }, 1000);
+}
+
+function updateCountdownUI() {
+  const sst = document.getElementById('sst');
+  if (_countdownSecs > 0) {
+    sst.textContent = '⏱ Sending alert in ' + _countdownSecs + ' seconds…';
+    sst.style.color = _countdownSecs <= 5 ? '#f43f5e' : '#f59e0b';
+  }
+}
+
+async function fireAlert(voiceReady) {
+  // Guarantee exactly one emergency alert per SOS session — no matter how many
+  // 15s check-in cycles ran before this, and even if this ever got called twice.
+  if (_alertFiredThisSession) return;
+  _alertFiredThisSession = true;
+  _sosCheckCount++;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '🚨 Alert sent to your emergency contact!';
+  sst.style.color = '#f43f5e';
+
+  const csEl = document.getElementById('cs');
+  csEl.style.display = 'block';
+  csEl.textContent   = '🚨 Location sent — closing SOS…';
+  csEl.style.color   = '#f43f5e';
+
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+
+  // Stop listening/counting immediately — this alert fires exactly once
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
   if (voiceChecker) voiceChecker.stop();
+
+  const finish = (ok) => {
+    // Single notification for this whole SOS session's outcome — the timer-end/
+    // alert-sent moment — rather than a toast for every intermediate step.
+    showToast(ok ? '🚨 Alert sent! WhatsApp & email notified.' : '🚨 Alert triggered — but location could not be sent. Call emergency services directly if needed.');
+    // Close automatically after a moment so the confirmation is visible first.
+    setTimeout(() => { closeSOS(true); }, 3000);
+  };
+
+  if (!navigator.geolocation) { finish(false); return; }
+
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      if (!curUser) { finish(false); return; }
+      try {
+        const r = await triggerEmergencyAlert(curUser.id, pos.coords.latitude, pos.coords.longitude);
+        if (r.success) {
+          activeAlertId = r.alertId;
+          if (activeAlertId && _lastVoiceScore !== null) {
+            try {
+              await supabase.from('emergency_alerts')
+                .update({ voice_verified: false, voice_match_score: _lastVoiceScore })
+                .eq('id', activeAlertId);
+            } catch(e) { console.warn('Could not log voice score:', e); }
+          }
+          finish(true);
+        } else {
+          finish(false);
+        }
+      } catch(e) { console.error('Alert error:', e); finish(false); }
+    },
+    () => finish(false), // location permission denied/unavailable — still let the user know
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
+}
+
+// Voice verified as a match — cancels current countdown, starts a fresh one.
+// No toast here on purpose: intermediate check-ins aren't a "notification"-worthy
+// event, only SOS closing or the alert actually being sent are.
+function confirmSafe() {
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
+  if (voiceChecker) voiceChecker.stop();
+  _lastVoiceScore = null;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '✅ Good! Next check in 15 seconds…';
+  sst.style.color = 'var(--teal)';
+
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Timer resets right away — brief pause is just so "Good!" is readable before it flips.
+  setTimeout(() => startCountdown(true), 700);
+}
+
+// Fallback path — only shown when the user has no voice profile enrolled, or after
+// repeated voice mismatches. Same "no intermediate toast" rule as confirmSafe().
+function manualConfirmSafe() {
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
+  _sosVoiceMismatchStreak = 0;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '✅ Good! Next check in 15 seconds…';
+  sst.style.color = 'var(--teal)';
+
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  setTimeout(() => startCountdown(false), 700);
+}
+
+// Cancel — fully stops SOS monitoring. `firedAlert` is true when this is being
+// called from fireAlert()'s own auto-close, in which case the alert-sent toast
+// already told the user what happened and a second "stopped" toast would just
+// be noise; it's only shown for an actual manual close.
+function closeSOS(firedAlert) {
+  const waBtn = document.getElementById('whatsapp-alert-btn');
+if (waBtn) { waBtn.style.display = 'none'; waBtn.href = '#'; }
+  _sosActive = false;
+  _alertFiredThisSession = false;
+  clearInterval(_sosCountdown);
+  clearInterval(_sosInterval);
+  _sosCountdown  = null;
+  _sosInterval   = null;
+  _sosCheckCount = 0;
+  _countdownSecs = 15;
+
+  if (voiceChecker) { voiceChecker.stop(); voiceChecker = null; }
+  _lastVoiceScore = null;
+  _sosVoiceMismatchStreak = 0;
+
   document.getElementById('sm').classList.remove('open');
-  document.getElementById('sos-voice-hint').style.display='none';
+  document.getElementById('cs').style.display = 'none';
+  document.getElementById('cs').style.color   = '';
+  document.getElementById('sst').style.color  = '';
+  document.getElementById('sst').textContent  = 'Notifying your emergency contact with live location.';
+  document.getElementById('sos-voice-hint').style.display = 'none';
+  document.getElementById('voice-status').style.display = 'none';
+  document.getElementById('manual-safe-btn').style.display = 'none';
+
+  if (!firedAlert) showToast('SOS monitoring stopped.');
 }
 
 // ════════════════════════════════════════
 // FEEDBACK
 // ════════════════════════════════════════
-function openFeedbackModal() {
-  if (!fromCoords || !toCoords) return;
-  feedbackStarRating=0;
-  _journeyEnded = false;
-  document.querySelectorAll('#feedbackStars .star').forEach(s=>s.classList.remove('lit'));
-  document.getElementById('feedbackModal').style.display='block';
-}
+// ════════════════════════════════════════
+// PER-WAYPOINT SAFETY REVIEW
+// Triggers when live navigation gets within ARRIVAL_RADIUS of the destination.
+// Asks about each named stop on the trip (not just the destination) — reuses
+// the chatbot's own trip breakdown (window.SP_LAST_TRIP_WAYPOINTS) when the
+// last trip was planned through it and still matches this destination;
+// otherwise falls back to just the start and end points on the map.
+// Needs supabase/migrations/002_waypoint_ratings.sql — see that file.
+// ════════════════════════════════════════
+const ARRIVAL_RADIUS = 10; // metres
+let _reviewQueue = null;   // { list: [{name,lat,lng}], i }
+let _reviewTriggered = false;
 
-function closeFeedbackModal() {
-  document.getElementById('feedbackModal').style.display='none';
-}
-
-function setFeedbackStar(v) {
-  feedbackStarRating=v;
-  document.querySelectorAll('#feedbackStars .star').forEach((s,i)=>s.classList.toggle('lit',i<v));
-}
-
-async function submitFeedback() {
-  if (!feedbackStarRating) { showToast('Please select a star rating first.'); return; }
-  if (!curUser||!curRoutes.length) { closeFeedbackModal(); return; }
+function reviewVoterId() {
   try {
-    const rd={fromLat:fromCoords[0],fromLng:fromCoords[1],toLat:toCoords[0],toLng:toCoords[1],polyline:''};
-    const res=await saveRouteRating(curUser.uid,rd,feedbackStarRating,'',feedbackStarRating);
-    if (res.success) { closeFeedbackModal(); showToast('Rating submitted. Thank you!'); }
-    else showToast('Could not save — try again');
-  } catch(e) { showToast('Could not save — try again'); }
+    let id = localStorage.getItem('sp_voter_id');
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : 'v' + Date.now() + Math.random().toString(36).slice(2)); localStorage.setItem('sp_voter_id', id); }
+    return id;
+  } catch (e) { return 'anon'; }
+}
+function reviewSlot(h) {
+  return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : h >= 17 && h < 21 ? 'evening' : 'night';
+}
+async function submitWaypointReviewDash(pt, feltUnsafe) {
+  if (!window.supabase) return false;
+  try {
+    const { error } = await window.supabase.from('waypoint_ratings').insert({
+      lat: pt.lat, lng: pt.lng, place_name: pt.name, time_slot: reviewSlot(new Date().getHours()), felt_unsafe: feltUnsafe, voter_id: reviewVoterId()
+    });
+    return !error;
+  } catch (e) { return false; }
+}
+
+function triggerArrivalReview() {
+  if (_reviewTriggered) return;
+  let wps = (window.SP_LAST_TRIP_WAYPOINTS || []).slice();
+  const last = wps[wps.length - 1];
+  const dest = toCoords || (last ? [last.lat, last.lng] : null);
+  if (!last || (toCoords && getDistance(last.lat, last.lng, toCoords[0], toCoords[1]) > 400)) {
+    // The chatbot's last trip doesn't match this destination — fall back to whatever points we do have.
+    wps = [];
+    const fromLabel = ((document.getElementById('inp-from') || {}).value || 'Start point').split(',')[0];
+    const toLabel = ((document.getElementById('inp-to') || {}).value || 'Destination').split(',')[0];
+    if (fromCoords) wps.push({ name: fromLabel, lat: fromCoords[0], lng: fromCoords[1] });
+    if (toCoords) wps.push({ name: toLabel, lat: toCoords[0], lng: toCoords[1] });
+  }
+  if (!wps.length) {
+    // No route has ever been set (e.g. testing the button on its own) — use a
+    // placeholder point purely so the review flow itself can still be demonstrated.
+    wps = [{ name: 'Demo location', lat: 19.0760, lng: 72.8777 }];
+  }
+  _reviewTriggered = true;
+  _reviewQueue = { list: wps, i: 0 };
+  document.getElementById('reviewModal').style.display = 'block';
+  renderReviewQuestion();
+}
+
+function renderReviewQuestion() {
+  if (!_reviewQueue) return;
+  document.getElementById('rvPlaceName').textContent = _reviewQueue.list[_reviewQueue.i].name;
+}
+
+async function answerReviewDash(val) {
+  const q = _reviewQueue; if (!q) return;
+  if (val === 'skip') {
+    // "Skip" means skip the whole review, not just this one waypoint — closing
+    // the modal here rather than advancing to the next question.
+    document.getElementById('reviewModal').style.display = 'none';
+    _reviewQueue = null;
+    return;
+  }
+  const pt = q.list[q.i];
+  await submitWaypointReviewDash(pt, val === 'no');
+  q.i++;
+  if (q.i >= q.list.length) {
+    document.getElementById('reviewModal').style.display = 'none';
+    _reviewQueue = null;
+    showToast('Thanks for your safety review! 🙏');
+    return;
+  }
+  renderReviewQuestion();
+}
+
+function reviewHasPending() {
+  return !!_reviewQueue && _reviewQueue.i < _reviewQueue.list.length;
+}
+
+// Called by the panel's own ✕ button.
+function closeReviewModalAttempt() {
+  if (reviewHasPending() && !confirm('Your safety review for this trip hasn\'t been submitted yet. Close without answering?')) return;
+  document.getElementById('reviewModal').style.display = 'none';
+  _reviewQueue = null;
 }
 
 // ════════════════════════════════════════
@@ -2829,43 +3210,30 @@ function openPanel() {
 }
 
 // ════════════════════════════════════════
-// ✅ CHANGE 2: START NAVIGATION — centres on user's current location
-// ════════════════════════════════════════
-// ════════════════════════════════════════
 // NAV HUD STATE
 // ════════════════════════════════════════
 let _navHudOpen = false;
 let _navEtaInterval = null;
 
 function startNavigation() {
-  // 1. Collapse & fully hide side panel during navigation
   togglePanel(true);
   document.getElementById('panel').style.visibility = 'hidden';
   document.getElementById('panel-toggle').style.display = 'none';
-  // Hide Leaflet's bottom-right locate button — replaced by nav-locate-btn
   const leafletLocate = document.querySelector('.locate-btn');
   if (leafletLocate) leafletLocate.style.display = 'none';
 
-  // 2. Start live tracking
   if (!trackingOn) {
     startLiveTracking();
     trackingOn = true;
   }
 
-  // 3. Show the nav HUD (bottom sheet)
   showNavHud();
 
-  // 4. Get GPS, place marker, zoom ALL the way in to user
-  // ── STEP 1: Show arrow IMMEDIATELY from known position ─────────────────
-  // Don't wait for GPS — use fromCoords right now so the arrow appears
-  // the instant Start Navigation is tapped.
   const initLat = fromCoords ? fromCoords[0] : 19.076;
   const initLng = fromCoords ? fromCoords[1] : 72.877;
 
-  // Show arrow at known position immediately (heading null until compass fires)
   placeLocationMarker(initLat, initLng, 30, null);
 
-  // Hide non-selected routes immediately
   if (routeLayers && routeLayers.length) {
     routeLayers.forEach((layer, i) => {
       if (!layer) return;
@@ -2874,7 +3242,6 @@ function startNavigation() {
       } else {
         const ll = layer.getLatLngs();
         if (ll && ll.length > 1) {
-          // Build new array with pinned start point
           const newLl = [L.latLng(initLat, initLng), ...ll.slice(1)];
           layer.setLatLngs(newLl);
           layer.setStyle({ opacity: 0.9, weight: 6 });
@@ -2883,16 +3250,12 @@ function startNavigation() {
     });
   }
 
-  // Remove start marker — arrow replaces it
   if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
 
-  // Fly to user at zoom 18 (street level — tiles exist here on all devices)
   setTimeout(() => {
     map.setView([initLat, initLng], NAV_ZOOM, { animate: false });
   }, 450);
 
-  // ── STEP 2: Refine with accurate GPS fix in background ───────────────
-  // Once the real GPS fix arrives, update marker + repin route silently.
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       pos => {
@@ -2901,11 +3264,9 @@ function startNavigation() {
         const acc = pos.coords.accuracy;
         fromCoords = [lat, lng];
         placeLocationMarker(lat, lng, acc, _compassHeading);
-        // Ensure zoom is at street level after GPS refine
         if (map.getZoom() < 16) {
           map.setView([lat, lng], NAV_ZOOM, { animate: true });
         }
-        // Repin route start to accurate position
         const layer = routeLayers[selIdx];
         if (layer && map.hasLayer(layer)) {
           const ll = layer.getLatLngs();
@@ -2921,16 +3282,13 @@ function startNavigation() {
   }
 }
 
-// ── Show the bottom HUD ────────────────────────────────────────────────────
 function showNavHud() {
   const hud = document.getElementById('nav-hud');
-  // Reset animation so it replays on subsequent nav sessions
   hud.style.animation = 'none';
-  hud.offsetHeight; // force reflow
+  hud.offsetHeight;
   hud.style.animation = '';
   hud.classList.add('visible');
 
-  // Always reset: scroll hidden, divider hidden, locate btn visible
   _navHudOpen = false;
   const scroll = document.getElementById('nav-scroll');
   if (scroll) { scroll.classList.remove('open'); scroll.scrollTop = 0; }
@@ -2938,32 +3296,27 @@ function showNavHud() {
   if (divider) divider.style.display = 'none';
   const locBtn = document.getElementById('nav-locate-btn');
   if (locBtn) { locBtn.classList.add('nav-visible'); locBtn.classList.remove('nav-hidden'); }
-  _navFollowMode = true; // start with follow enabled
+  _navFollowMode = true;
 
-  // Hide floating SOS circle — HUD has its own button
   const sosCircle = document.getElementById('sos-circle');
-  if (sosCircle) sosCircle.classList.remove('visible');
+  if (sosCircle && !_sosActive) sosCircle.classList.remove('visible');
 
-  // Populate content
+  updateZoneMuteBtn();
+
   populateNdRoutes();
   document.querySelectorAll('.nd-mode-sw .nd-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === travelMode);
   });
-  // Map layers now controlled via on-map buttons (no HUD layer toggles)
 
-  // Show destination emoji in HUD
   const emojiEl = document.getElementById('nstat-dest-emoji');
   if (emojiEl) {
     emojiEl.textContent = _destEmoji || '📍';
     emojiEl.style.display = 'block';
   }
-  updateNavStats(true);  // force initial display — uses current curRoutes[selIdx].durSecs
-  // Stats update every GPS tick when user moves, and after every refetch
+  updateNavStats(true);
 
-  // HUD is position:fixed — no padding needed on map wrapper.
   setTimeout(() => {
     if (map) map.invalidateSize();
-    // Position locate button just above the peek section
     updateNavLocatePos();
   }, 520);
 }
@@ -2976,13 +3329,11 @@ function updateNavLocatePos() {
   btn.style.bottom = (sheetH + 10) + 'px';
 }
 
-
 function populateNdRoutes() {
   const list = document.getElementById('nd-routes');
   list.innerHTML = '';
   const labels = ['🛡️ Safest', '⚡ Fastest', '🔀 Alternate'];
 
-  // Build order: selected route first, then the rest
   const order = [selIdx, ...curRoutes.map((_,i) => i).filter(i => i !== selIdx)];
 
   order.forEach(i => {
@@ -2997,7 +3348,6 @@ function populateNdRoutes() {
     item.onclick = () => {
       selIdx = i;
       if (_navMode) {
-        // Show only the newly selected route
         routeLayers.forEach((l, ri) => {
           if (!l) return;
           if (ri !== i) { if (map.hasLayer(l)) map.removeLayer(l); }
@@ -3012,7 +3362,6 @@ function populateNdRoutes() {
             }
           }
         });
-        // Reset stats cache so new route stats show immediately
         _statsLastLat = null; _statsLastLng = null;
       } else {
         selectRoute(i);
@@ -3024,11 +3373,10 @@ function populateNdRoutes() {
   });
 }
 
-// Cache last stats position so we only update when user actually moves
 let _statsLastLat  = null;
 let _statsLastLng  = null;
-let _statsDistM    = null;   // last calculated remaining distance
-let _statsDurSecs  = null;   // last calculated remaining duration
+let _statsDistM    = null;
+let _statsDurSecs  = null;
 
 function updateNavStats(forceUpdate) {
   if (!curRoutes.length || selIdx >= curRoutes.length) return;
@@ -3043,7 +3391,6 @@ function updateNavStats(forceUpdate) {
       : 999;
 
     if (forceUpdate || movedDist >= 10) {
-      // Sum remaining route polyline length (accurate, shrinks as route trims)
       let remainDist = 0;
       const activeLayer = routeLayers[selIdx];
       if (activeLayer && map.hasLayer(activeLayer)) {
@@ -3052,14 +3399,12 @@ function updateNavStats(forceUpdate) {
           remainDist += getDistance(ll[i].lat, ll[i].lng, ll[i+1].lat, ll[i+1].lng);
         }
       }
-      // Fallback to straight-line if polyline not available
       if (remainDist < 1) {
         remainDist = getDistance(fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]);
       }
 
       const totalDurSecs = r.durSecs || 1;
       const totalDistM   = r.distM   || 1;
-      // Scale ORS duration by remaining fraction — consistent with route cards
       const ratio = Math.max(0, Math.min(remainDist / totalDistM, 1));
       distM   = remainDist;
       durSecs = totalDurSecs * ratio;
@@ -3072,29 +3417,24 @@ function updateNavStats(forceUpdate) {
       if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
     }
   }
-  // Always show ORS values when not yet navigating (matches route cards exactly)
   if (!_navMode || distM === 0) {
     distM   = r.distM   || 0;
     durSecs = r.durSecs || 0;
   }
 
-  // Format distance
   const distStr = distM < 1000
     ? Math.round(distM) + ' m'
     : (distM / 1000).toFixed(1) + ' km';
 
-  // Format time
   const durMin = Math.round(durSecs / 60);
   const timeStr = durMin >= 60
     ? Math.floor(durMin/60) + 'h ' + (durMin%60 > 0 ? durMin%60+'m' : '')
     : durMin + ' min';
 
-  // ETA
   const eta = new Date(Date.now() + durSecs * 1000);
   const etaStr = eta.getHours().toString().padStart(2,'0') + ':'
                + eta.getMinutes().toString().padStart(2,'0');
 
-  // Update HUD elements
   const distEl = document.getElementById('nstat-dist');
   if (distEl) distEl.textContent = distStr;
   const timeEl = document.getElementById('nstat-time-val');
@@ -3103,7 +3443,6 @@ function updateNavStats(forceUpdate) {
   if (etaEl)  etaEl.textContent  = etaStr;
 }
 
-// Map click handler to close the nav drawer
 function _onMapClickCloseDrawer() {
   if (_navHudOpen) toggleNavDrawer();
 }
@@ -3116,7 +3455,6 @@ function toggleNavDrawer() {
   if (scroll) scroll.classList.toggle('open', _navHudOpen);
   if (divider) divider.style.display = _navHudOpen ? 'block' : 'none';
 
-  // Hide locate btn when sheet is expanded; show when collapsed
   if (locBtn) {
     if (_navHudOpen) {
       locBtn.classList.add('nav-hidden');
@@ -3126,7 +3464,6 @@ function toggleNavDrawer() {
     }
   }
 
-  // When drawer opens: tap map to close; when closes: remove listener
   if (_navHudOpen) {
     setTimeout(() => map.once('click', _onMapClickCloseDrawer), 50);
   } else {
@@ -3152,27 +3489,16 @@ function ndSetMode(btn) {
   }, 500);
 }
 
-function ndToggleHeat(btn) {
-  toggleHeat(); // reuse existing function which flips heatOn and updates map
-  btn.classList.toggle('active', heatOn);
-  // Also sync the main panel button
-  document.getElementById('lheat').classList.toggle('on', heatOn);
-}
-
-function ndToggleZones(btn) {
-  toggleZones(); // reuse existing function
-  btn.classList.toggle('active', zonesOn);
-  document.getElementById('lzone').classList.toggle('on', zonesOn);
-}
-
-// ── Exit navigation — restore dashboard ────────────────────────────────────
 function exitNavigation() {
+  if (reviewHasPending() && !confirm('You have an unanswered safety review for this trip. Exit and discard it?')) return;
+  _reviewQueue = null;
+  document.getElementById('reviewModal').style.display = 'none';
+  if (_sosActive) closeSOS();
   clearInterval(_navEtaInterval);
   _navEtaInterval = null;
   _navHudOpen = false;
   trackingOn = false;
 
-  // Hide HUD — clear inline style so class works on next nav session
   const hud = document.getElementById('nav-hud');
   hud.classList.remove('visible');
   hud.style.display = '';
@@ -3181,7 +3507,6 @@ function exitNavigation() {
   if (scroll2) { scroll2.classList.remove('open'); scroll2.scrollTop = 0; }
   const divider2 = document.getElementById('nav-peek-div');
   if (divider2) divider2.style.display = 'none';
-  // Hide the nav locate button and remove any lingering map listener
   const locBtn2 = document.getElementById('nav-locate-btn');
   if (locBtn2) { locBtn2.classList.remove('nav-visible'); locBtn2.classList.add('nav-hidden'); }
 
@@ -3190,65 +3515,45 @@ function exitNavigation() {
   document.documentElement.style.removeProperty('--peek-h');
   document.documentElement.style.removeProperty('--hud-h');
 
-  // Stop live tracking and clear traversed path
   stopLiveTracking();
   if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
   traversedCoords = [];
 
-  // ── Full reset to fresh dashboard state ───────────────────────────────────
-  // Clear all route layers
   routeLayers.forEach(l => { if (l) map.removeLayer(l); });
   routeLayers = [];
   curRoutes = [];
   selIdx = 0;
 
-  // Restore any hidden route layers before clearing
-  routeLayers.forEach(l => { if (l && !map.hasLayer(l)) map.addLayer(l); });
-  // Clear route markers but KEEP the live location marker + accuracy circle
   if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
   if (toMarker)   { map.removeLayer(toMarker);   toMarker   = null; }
-  // locMarker and locAccCircle are intentionally preserved so the
-  // user's current position dot stays visible after exiting navigation.
 
-  // Reset destination only — keep fromCoords so location dot stays
   toCoords = null;
   _destEmoji = '📍';
 
-  // Reset destination input — keep origin as-is so user's location stays shown
   document.getElementById('inp-to').value = '';
   document.getElementById('inp-to').placeholder = 'Type any place — Churchgate, IIT, Juhu Beach…';
-  // Hide clear button and dest emoji
   const toClearBtn = document.getElementById('to-clear');
   if (toClearBtn) toClearBtn.classList.remove('visible');
   const emojiEl2 = document.getElementById('nstat-dest-emoji');
   if (emojiEl2) emojiEl2.style.display = 'none';
 
-  // Hide route results section
   document.getElementById('rsec').style.display = 'none';
-
-  // Hide Find Safest Route button
   document.getElementById('bfind').style.display = 'none';
-
-  // Hide travel mode section
   document.getElementById('mode-section').style.display    = 'none';
   document.getElementById('mode-div-top').style.display    = 'none';
   document.getElementById('mode-div-bottom').style.display = 'none';
 
-  // Reset travel mode pill to walking
   travelMode = 'foot-walking';
   document.querySelectorAll('#mode-sw .sbt').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === 'foot-walking');
   });
 
-  // Close category panel if open
   document.getElementById('cat-panel').classList.remove('open');
   document.getElementById('cat-toggle').classList.remove('open');
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
 
-  // Restore Leaflet locate button
   const leafletLocate2 = document.querySelector('.locate-btn');
   if (leafletLocate2) leafletLocate2.style.display = '';
-  // Restore panel visibility then open it
   document.getElementById('panel').style.visibility = '';
   document.getElementById('panel-toggle').style.display = '';
   openPanel();
@@ -3257,7 +3562,6 @@ function exitNavigation() {
     if (pi) pi.scrollTo({ top: 0, behavior: 'smooth' });
     if (map) {
       map.invalidateSize({ animate: true });
-      // Zoom to user's live location if marker exists, else Mumbai overview
       if (locMarker) {
         const ll = locMarker.getLatLng();
         map.flyTo([ll.lat, ll.lng], DEFAULT_ZOOM, { animate: true, duration: 1.2 });
@@ -3281,10 +3585,7 @@ function toggleTheme() {
   document.getElementById('icon-moon').style.display=isLight?'':'none';
   localStorage.setItem('sp-theme',isLight?'light':'dark');
   if (tileLayer) map.removeLayer(tileLayer);
-  tileLayer=L.tileLayer(isLight?TILES.light:TILES.dark,{
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-    subdomains:'abcd',maxZoom:19
-  }).addTo(map);
+  tileLayer=makeTileLayer(isLight).addTo(map);
   tileLayer.bringToBack();
   if (heatOn&&heatLayer) heatLayer.addTo(map);
   zoneMarkers.forEach(m=>{ if(zonesOn) m.addTo(map); });
@@ -3300,25 +3601,21 @@ function applyStoredTheme() {
 }
 
 // ════════════════════════════════════════
-// LIVE TRACKING — moves the user dot in real time during navigation
+// LIVE TRACKING
 // ════════════════════════════════════════
-// Stores the traversed path coordinates
 let traversedCoords = [];
 let traversedLayer  = null;
-let _liveSpeedMps       = null;   // actual GPS speed in m/s (updated each tick)
-let _navFollowMode      = false;  // true = map pans to follow user
-let _offRouteCount      = 0;      // consecutive GPS ticks off-route
-let _isRecalculating    = false;  // prevent multiple recalc calls
-let _rerouteDebounce    = null;   // debounce timer for rerouting
-const OFF_ROUTE_METRES  = 80;     // metres from route before warning/rerouting
-const OFF_ROUTE_TICKS   = 3;      // consecutive ticks off-route before rerouting
-let _navMode            = false;  // true when actively navigating
-let _lastHeading        = null;   // last known compass heading in degrees
-let _compassHeading     = null;   // heading from DeviceOrientation API
-let _compassListener    = null;   // stored so we can remove it later
-
-
-
+let _liveSpeedMps       = null;
+let _navFollowMode      = false;
+let _offRouteCount      = 0;
+let _isRecalculating    = false;
+let _rerouteDebounce    = null;
+const OFF_ROUTE_METRES  = 80;
+const OFF_ROUTE_TICKS   = 3;
+let _navMode            = false;
+let _lastHeading        = null;
+let _compassHeading     = null;
+let _compassListener    = null;
 
 function startCompass() {
   if (!window.DeviceOrientationEvent) return;
@@ -3327,34 +3624,30 @@ function startCompass() {
   function handleOrientation(e) {
     let heading = null;
     if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
-      heading = e.webkitCompassHeading;                    // iOS — most accurate
+      heading = e.webkitCompassHeading;
     } else if (e.absolute && e.alpha !== null) {
-      heading = (360 - e.alpha) % 360;                    // Android absolute
+      heading = (360 - e.alpha) % 360;
     } else if (e.alpha !== null) {
-      heading = (360 - e.alpha) % 360;                    // Android fallback
+      heading = (360 - e.alpha) % 360;
     }
     if (heading === null) return;
     _compassHeading = heading;
     _lastHeading    = heading;
     if (!_navMode) return;
 
-    // Throttle to 30fps max
     const now = Date.now();
     if (now - _lastUpdate < 33) return;
     _lastUpdate = now;
 
-    // Fast path — just rotate the existing arrow element via CSS
     const arrowEl = document.querySelector('.nav-arrow');
     if (arrowEl) {
       arrowEl.style.transform = 'rotate(' + heading + 'deg)';
     } else if (locMarker) {
-      // Slow path — recreate marker if arrow not yet rendered
       const ll = locMarker.getLatLng();
       placeLocationMarker(ll.lat, ll.lng, 20, heading);
     }
   }
 
-  // iOS 13+ requires explicit permission
   if (typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission()
       .then(p => {
@@ -3380,15 +3673,93 @@ function stopCompass() {
   _compassHeading = null;
 }
 
+// Speaks up when live tracking crosses INTO a higher-risk area, and keeps repeating a
+// short "Entering Unsafe Zone" alert at a fixed interval for as long as the user stays
+// inside it — not on every GPS tick, and it stops the moment the zone is left or muted.
+let _zoneAlertState = null;   // null | 'safe' | 'risky'
+let _zoneAlertRepeatTimer = null;
+let _zoneAlertMuted = (localStorage.getItem('sp_zone_alert_muted') === '1');
+const ZONE_ALERT_RISK = 6;        // score (0–10) that counts as "unsafe"
+const ZONE_ALERT_REPEAT_MS = 5 * 1000; // how often the alert repeats while still inside the zone
+const ZONE_ALERT_TEXT = 'Entering Unsafe Zone';
+
+// Single choke point for unsafe-zone speech: always shows a toast (so the alert is
+// still visible if voice is muted or speech synthesis isn't available), and only
+// speaks aloud when the user hasn't muted these alerts.
+function announceZoneRisk(text) {
+  showToast('⚠️ ' + text);
+  if (!_zoneAlertMuted) speakAlert(text);
+}
+
+function startZoneAlertRepeat() {
+  stopZoneAlertRepeat();
+  announceZoneRisk(ZONE_ALERT_TEXT);
+  _zoneAlertRepeatTimer = setInterval(() => {
+    if (_zoneAlertMuted) return; // keep the loop alive (in case unmuted mid-zone) but stay silent
+    announceZoneRisk(ZONE_ALERT_TEXT);
+  }, ZONE_ALERT_REPEAT_MS);
+}
+
+function stopZoneAlertRepeat() {
+  if (_zoneAlertRepeatTimer) { clearInterval(_zoneAlertRepeatTimer); _zoneAlertRepeatTimer = null; }
+}
+
+function toggleZoneAlertMute() {
+  _zoneAlertMuted = !_zoneAlertMuted;
+  try { localStorage.setItem('sp_zone_alert_muted', _zoneAlertMuted ? '1' : '0'); } catch (e) {}
+  if (_zoneAlertMuted && window.speechSynthesis) window.speechSynthesis.cancel();
+  updateZoneMuteBtn();
+  showToast(_zoneAlertMuted ? '🔇 Unsafe-zone voice alerts muted' : '🔊 Unsafe-zone voice alerts on');
+}
+
+function updateZoneMuteBtn() {
+  const btn = document.getElementById('zone-mute-btn');
+  if (!btn) return;
+  btn.innerHTML = _zoneAlertMuted ? '🔇 Muted' : '🔊 Zone Alerts';
+  btn.style.borderColor = _zoneAlertMuted ? 'var(--red)' : '';
+  btn.style.color = _zoneAlertMuted ? 'var(--red)' : '';
+}
+
+// TEST HELPER — exercises the SAME state machine a real unsafe-zone crossing does
+// (repeat every 15s while "inside", stop on "leaving", start fresh again on
+// re-"entering") — not just a single one-off announcement — so tapping this
+// button actually demonstrates repeat/stop/restart, not just one alert.
+function simulateUnsafeZone() {
+  if (_zoneAlertState === 'risky') {
+    _zoneAlertState = 'safe';
+    stopZoneAlertRepeat();
+    showToast('✅ (test) Left the unsafe zone — alerts stopped');
+  } else {
+    _zoneAlertState = 'risky';
+    startZoneAlertRepeat();
+  }
+}
+
+function checkZoneVoiceAlert(lat, lng) {
+  try {
+    if (!crimeZones.length) return;
+    const score = scorePoint(lat, lng, buildZoneCache(new Date().getHours()));
+    const risky = score >= ZONE_ALERT_RISK;
+    if (risky && _zoneAlertState !== 'risky') {
+      _zoneAlertState = 'risky';
+      startZoneAlertRepeat();
+    } else if (!risky && _zoneAlertState === 'risky') {
+      _zoneAlertState = 'safe'; // silent — only the entry warning repeats, not a constant "all clear"
+      stopZoneAlertRepeat();
+    }
+  } catch (e) { /* voice alert is best-effort; never block navigation over it */ }
+}
+
 function startLiveTracking() {
-  if (liveWatchId !== null) return; // already watching
+  if (liveWatchId !== null) return;
 
   if (!navigator.geolocation) {
     showToast('Geolocation not supported on this device');
     return;
   }
 
-  // Reset traversed path and stats cache for new journey
+  _zoneAlertState = null; stopZoneAlertRepeat();
+  _reviewTriggered = false;
   traversedCoords = [];
   _lastHeading      = null;
   _compassHeading   = null;
@@ -3406,21 +3777,17 @@ function startLiveTracking() {
   liveWatchId = navigator.geolocation.watchPosition(
     pos => {
       const { latitude: lat, longitude: lng, accuracy: acc, speed: gpsSpeed } = pos.coords;
-      // Track actual speed — GPS speed is in m/s, only use if valid
       if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
 
-      // Move location marker — use compass heading for arrow direction
       placeLocationMarker(lat, lng, acc, _compassHeading !== null ? _compassHeading : _lastHeading);
+      checkZoneVoiceAlert(lat, lng);
 
-      // Update fromCoords
       fromCoords = [lat, lng];
       traversedCoords.push([lat, lng]);
 
-      // ── Route tracking: trim passed points + detect off-route ──────────
       if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
         const routeLatLngs = routeLayers[selIdx].getLatLngs();
         if (routeLatLngs.length > 1) {
-          // Find closest point on route to user
           let closestIdx = 0;
           let minDist = Infinity;
           for (let i = 0; i < routeLatLngs.length; i++) {
@@ -3428,26 +3795,21 @@ function startLiveTracking() {
             if (d < minDist) { minDist = d; closestIdx = i; }
           }
 
-          // ── OFF-ROUTE DETECTION ───────────────────────────────────────────
           if (minDist > OFF_ROUTE_METRES) {
             _offRouteCount++;
             if (_offRouteCount === 1) {
-              // First tick off — warn immediately
               showToast('⚠️ You are off route — recalculating…');
               if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
             }
             if (_offRouteCount >= OFF_ROUTE_TICKS) {
-              // Consistently off route — recalculate from current position
               _offRouteCount = 0;
               clearTimeout(_rerouteDebounce);
               _rerouteDebounce = setTimeout(() => {
                 if (!_navMode || !toCoords) return;
                 showToast('🔄 Recalculating safest route…');
-                // Temporarily disable nav mode so findRoutes works
                 _navMode = false;
                 findRoutes().then(() => {
                   _navMode = true;
-                  // Re-hide non-selected routes
                   routeLayers.forEach((l, i) => {
                     if (l && i !== selIdx) map.removeLayer(l);
                   });
@@ -3461,11 +3823,9 @@ function startLiveTracking() {
               }, 2000);
             }
           } else {
-            // Back on route — reset counter
             _offRouteCount = 0;
             clearTimeout(_rerouteDebounce);
 
-            // ── TRIM passed points ──────────────────────────────────────────
             if (minDist < 80 && closestIdx > 0) {
               let isBehind = true;
               if (heading !== null && closestIdx < routeLatLngs.length - 1) {
@@ -3491,35 +3851,29 @@ function startLiveTracking() {
         }
       }
 
-      // ── Off-route detection ───────────────────────────────────────────
-      // If user is far from the selected route, warn and auto-recalculate
       if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
         const routeLL2 = routeLayers[selIdx].getLatLngs();
         let nearestDist = Infinity;
         for (let i = 0; i < routeLL2.length; i++) {
           const d = getDistance(lat, lng, routeLL2[i].lat, routeLL2[i].lng);
           if (d < nearestDist) nearestDist = d;
-          if (nearestDist < OFF_ROUTE_METRES) break; // close enough, stop early
+          if (nearestDist < OFF_ROUTE_METRES) break;
         }
 
         if (nearestDist > OFF_ROUTE_METRES) {
           _offRouteCount++;
           if (_offRouteCount === 2) {
-            // First warning — gentle nudge
             showToast('⚠️ You seem to be off route');
             if (navigator.vibrate) navigator.vibrate(200);
           }
           if (_offRouteCount >= OFF_ROUTE_TICKS && !_isRecalculating) {
-            // User is consistently off-route — recalculate from current position
             _isRecalculating = true;
             _offRouteCount = 0;
             showToast('Recalculating safest route…');
             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-            // Update origin to current position and find new route
             fromCoords = [lat, lng];
             findRoutes().then(() => {
               _isRecalculating = false;
-              // Restore single-route nav mode after recalc
               if (routeLayers && routeLayers.length) {
                 routeLayers.forEach((layer, i) => {
                   if (!layer) return;
@@ -3533,35 +3887,24 @@ function startLiveTracking() {
             }).catch(() => { _isRecalculating = false; });
           }
         } else {
-          // Back on route — reset counter
           _offRouteCount = 0;
         }
       }
 
-      // Update HUD stats live every GPS tick
-      // Update stats — gated internally to only change when moved 10m+
       updateNavStats();
 
-      // Keep arrow always centred during navigation
       if (_navFollowMode && map) {
         map.setView([lat, lng], map.getZoom(), { animate: true, duration: 0.3 });
       }
 
-      // Check if user is near any risk zones
       if (crimeZones.length) checkLiveRisk(lat, lng);
 
-      // ── Alert if user's current path is riskier than recommended ─────────
-      // If user has deviated and is now on a high-risk path, warn them
-      // even if they haven't fully left the route yet.
       if (_navMode && crimeZones.length && traversedCoords.length % 5 === 0) {
-        // Score the current position against risk zones
         const h2 = SH[_lastAutoSlot] || new Date().getHours();
         const cache2 = buildZoneCache(h2);
         const currentRisk = scorePoint(lat, lng, cache2);
 
-        // If user is in a significant risk zone AND it's not on the selected route
         if (currentRisk >= 6.0) {
-          // Check if the recommended route passes through here too
           const onRecommendedRoute = routeLayers[selIdx] &&
             map.hasLayer(routeLayers[selIdx]) &&
             (() => {
@@ -3581,25 +3924,23 @@ function startLiveTracking() {
         }
       }
 
-      // Check arrival — if within 30m of destination, trigger feedback
       if (toCoords && !_journeyEnded) {
         const distToDest = getDistance(lat, lng, toCoords[0], toCoords[1]);
-        if (distToDest < 30) {
+        if (distToDest < ARRIVAL_RADIUS) {
           _journeyEnded = true;
           showToast('You have arrived! 🎉');
           stopLiveTracking();
-          setTimeout(openFeedbackModal, 1500);
+          setTimeout(triggerArrivalReview, 1200);
         }
       }
     },
     err => {
       console.warn('Live tracking error:', err.message);
-      // Don't stop tracking on error — GPS can recover
     },
     {
       enableHighAccuracy: true,
       timeout: 10000,
-      maximumAge: 0        // always fresh position, never cached
+      maximumAge: 0
     }
   );
 }
@@ -3614,8 +3955,9 @@ function stopLiveTracking() {
   _liveSpeedMps = null;
   _navFollowMode = false;
   stopCompass();
+  stopZoneAlertRepeat();
+  _zoneAlertState = null;
   _lastHeading = null;
-  // Switch back to pulsing dot
   if (locMarker && fromCoords) {
     placeLocationMarker(fromCoords[0], fromCoords[1], 20);
   }
@@ -3624,11 +3966,19 @@ function stopLiveTracking() {
 // ════════════════════════════════════════
 // BOOT
 // ════════════════════════════════════════
+// ════════════════════════════════════════
+// TEST HELPER — Remove before launch
+// ════════════════════════════════════════
+function simulateArrival() {
+  _journeyEnded = true;
+  _reviewTriggered = false; // allow re-triggering on repeated test clicks
+  showToast('You have arrived! 🎉 (Simulated)');
+  setTimeout(triggerArrivalReview, 800);
+}
 window.addEventListener('DOMContentLoaded', () => {
   applyStoredTheme();
   startClock();
   initApp();
-  // Keep Leaflet in sync whenever the map wrapper resizes (e.g. HUD padding)
   if (typeof ResizeObserver !== 'undefined') {
     new ResizeObserver(() => { if (map) map.invalidateSize(); })
       .observe(document.getElementById('mw'));
@@ -3636,23 +3986,16 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<!-- ══════════════════════════════════════
-     NAVIGATION HUD — unified bottom sheet
-══════════════════════════════════════ -->
 <div id="nav-hud">
   <div id="nav-sheet" class="collapsed">
 
-    <!-- Drag handle — grab here to pull sheet up -->
     <div id="nav-handle" onclick="toggleNavDrawer()"></div>
 
-    <!-- ── PEEK — SOS circle | stats | Exit circle ── -->
     <div id="nav-peek" onclick="toggleNavDrawer()">
       <div id="nav-bar">
 
-        <!-- Big circular SOS — left -->
         <button class="nav-btn-sos" onclick="event.stopPropagation();openSOS()">SOS</button>
 
-        <!-- Centre stats -->
         <div id="nav-stats-center">
           <div id="nstat-dest-emoji"></div>
           <div id="nstat-time-val">—</div>
@@ -3664,21 +4007,25 @@ window.addEventListener('DOMContentLoaded', () => {
           </div>
         </div>
 
-        <!-- Big circular Exit — right -->
         <button class="nav-btn-exit" onclick="event.stopPropagation();exitNavigation()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           <span style="font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Exit</span>
         </button>
 
       </div>
+
+      <!-- Always visible alongside SOS/Exit — no need to expand the drawer for these -->
+      <div id="nav-quick-row" onclick="event.stopPropagation()">
+        <button class="nav-quick-btn" id="zone-mute-btn" onclick="toggleZoneAlertMute()">🔊 Zone Alerts</button>
+        <button class="nav-quick-btn nq-test" onclick="simulateArrival()">🧪 Simulate Arrival</button>
+        <button class="nav-quick-btn nq-test" onclick="simulateUnsafeZone()">🧪 Simulate Unsafe Zone</button>
+      </div>
     </div>
 
     <div id="nav-peek-div" style="display:none"></div>
 
-    <!-- ── SCROLL — revealed when sheet is dragged up ── -->
     <div id="nav-scroll">
 
-      <!-- Travel Mode -->
       <div>
         <div class="nd-sl">Travel Mode</div>
         <div class="nd-mode-sw">
@@ -3690,7 +4037,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
       <div class="nd-div"></div>
 
-      <!-- Route Options -->
       <div>
         <div class="nd-sl">Route Options</div>
         <div class="nd-route-list" id="nd-routes"></div>
@@ -3700,5 +4046,11 @@ window.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+<!-- Mumbai travel & safety chatbot -->
+
+<script src="js/mumbai-transit-data.js"></script>
+<!-- Optional: uncomment after deploying supabase/functions/sp-chat to let an LLM answer free-form questions
+<script>window.SP_CHAT_ENDPOINT = SUPABASE_URL + '/functions/v1/sp-chat';</script> -->
+<script src="js/mumbai-chatbot.js"></script>
 </body>
 </html>

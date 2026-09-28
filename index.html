@@ -5,10 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Safety Path – Sign In</title>
   <link rel="stylesheet" href="css/styles.css"/>
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- Supabase SDKs -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/auth-new.js"></script>
+  <!-- Regional language switcher (Hindi, Bengali, Tamil, Telugu, and other Indian state languages) -->
+  <script src="js/i18n.js"></script>
 </head>
 <body>
 <div class="page-wrap">
@@ -90,8 +93,6 @@
   </div>
 </div>
 
-<script src="js/firebase-config.js"></script>
-<script src="js/auth.js"></script>
 <script>
   // ── OTP Input navigation ──────────────────────────────────
   function otpNext(input, idx) {
@@ -162,17 +163,19 @@
       return;
     }
     showAlert('alert-box-otp', 'Verifying…', 'info');
-    const result = await verifyOTP(otp);
+    // UPDATED: pass phone + otp (Supabase requires both)
+    const phone = '+91' + document.getElementById('phone-input').value.trim();
+    const result = await verifyOTP(phone, otp);
     if (result.success) {
-      const exists = await checkUserExists(result.user.uid);
+      // UPDATED: .id instead of .uid (Supabase)
+      const exists = await checkUserExists(result.user.id);
       if (!exists) {
-        // New user — go to registration, pass uid via sessionStorage
-        sessionStorage.setItem('pendingUid', result.user.uid);
-        sessionStorage.setItem('pendingPhone', result.user.phoneNumber);
+        sessionStorage.setItem('pendingUid', result.user.id);
+        sessionStorage.setItem('pendingPhone', phone);
         sessionStorage.setItem('authMethod', 'phone');
         window.location.href = 'register.html';
       } else {
-        await updateLastLogin(result.user.uid);
+        await updateLastLogin(result.user.id);
         window.location.href = 'dashboard.html';
       }
     } else {
@@ -185,27 +188,26 @@
     clearAlert('alert-box');
     showAlert('alert-box', 'Opening Google Sign-In…', 'info');
     const result = await signInWithGoogle();
-    if (result.success) {
-      if (result.isNew || !(await checkUserExists(result.user.uid))) {
-        sessionStorage.setItem('pendingUid', result.user.uid);
-        sessionStorage.setItem('pendingEmail', result.user.email);
-        sessionStorage.setItem('pendingName', result.user.displayName || '');
-        sessionStorage.setItem('authMethod', 'google');
-        window.location.href = 'register.html';
-      } else {
-        await updateLastLogin(result.user.uid);
-        window.location.href = 'dashboard.html';
-      }
-    } else {
+    if (!result.success) {
       showAlert('alert-box', result.error || 'Google Sign-In failed.');
     }
+    // On success the browser redirects to Google and returns here;
+    // the auth guard below then routes the user to the dashboard or registration.
   }
 
   // ── Auth guard: redirect if already logged in ──────────────
+  // UPDATED: .id instead of .uid
   onAuthStateChanged(async (user) => {
-    if (user) {
-      const exists = await checkUserExists(user.uid);
-      if (exists) window.location.href = 'dashboard.html';
+    if (!user) return;
+    const exists = await checkUserExists(user.id);
+    if (exists) { window.location.href = 'dashboard.html'; return; }
+    // Signed in with Google but no profile yet -> finish registration
+    if (user.app_metadata && user.app_metadata.provider === 'google') {
+      sessionStorage.setItem('pendingUid', user.id);
+      sessionStorage.setItem('pendingEmail', user.email || '');
+      sessionStorage.setItem('pendingName', (user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || '');
+      sessionStorage.setItem('authMethod', 'google');
+      window.location.href = 'register.html';
     }
   });
 </script>
