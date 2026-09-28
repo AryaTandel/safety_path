@@ -9,7 +9,7 @@
 -- catches the error and just returns "no profile"), which makes SOS
 -- fall back to the plain manual "Tap Instead" confirmation and looks
 -- exactly like "the app isn't recognising my voice" — because it
--- never even got to check. Running this migration is what's missing.
+-- never even got to check. Running this migration is what's missing
 --
 -- TWO profiles per user, on purpose:
 --   registration_voiceprint / registration_language
