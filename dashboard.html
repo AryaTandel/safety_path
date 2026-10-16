@@ -1,0 +1,4180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<title>SafePath — Women's Safety Navigator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<!-- UPDATED: Supabase replaces Firebase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabase-config.js"></script>
+<script src="js/crypto.js"></script>
+<script src="js/auth-new.js"></script>
+<script>
+// Device detection — mobile gets closer zoom for navigation
+const _isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+               || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+const NAV_ZOOM     = _isMobile ? 20 : 18;
+const DEFAULT_ZOOM = _isMobile ? 17 : 16;
+</script>
+<script>
+// Map tiles. CARTO now requires a free API key for its basemaps.
+// Get one (no account needed) at https://carto.com/basemaps/apikey/ and paste it below.
+// Leave it empty to use OpenStreetMap's own tiles instead (no key needed).
+window.CARTO_API_KEY = '';
+</script>
+<script>window.ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImMyZTM5MThmOTM1YzQ3ZmE5M2I2ZjA3ZTdhNGYyMzk1IiwiaCI6Im11cm11cjY0In0=';</script>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0f141b;
+  --card:#161d26;
+  --card2:#1c2530;
+  --border:#2a3441;
+  --teal:#34c3b1;
+  --teal-dim:#27a899;
+  --teal-glow:rgba(52,195,177,0.10);
+  --teal-glow2:rgba(52,195,177,0.06);
+  --teal-dark:#2a3441;
+  --teal-light:#7ddccf;
+  --accent:#d9798b;
+  --accent-glow:rgba(217,121,139,0.12);
+  --amber:#e0a030;
+  --red:#e5604f;
+  --green:#4cb58a;
+  --fg:#e8ecf1;
+  --fg2:#b6c0cc;
+  --muted:#8b97a6;
+  --placeholder:#667384;
+  --input-bg:rgba(255,255,255,0.04);
+  --input-focus:rgba(255,255,255,0.06);
+  --sbt-bg:rgba(255,255,255,0.04);
+  --rc-bg:rgba(255,255,255,0.025);
+  --topbar-bg:rgba(15,20,27,0.96);
+  --panel-bg:rgba(18,24,32,0.99);
+  --shadow:rgba(0,0,0,0.5);
+  --modal-bg:rgba(0,0,0,0.65);
+  --grad:linear-gradient(#27a899,#27a899);
+  --grad-soft:linear-gradient(rgba(52,195,177,0.08),rgba(52,195,177,0.08));
+  --grad-accent:linear-gradient(#34c3b1,#34c3b1);
+  --font-h:'Public Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-b:'Public Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --panel:318px;
+}
+
+html.light{
+  --bg:#f3f5f8;
+  --card:#ffffff;
+  --card2:#f7f9fb;
+  --border:#d8dee6;
+  --teal:#0f766e;
+  --teal-dim:#0b5f58;
+  --teal-glow:rgba(15,118,110,0.09);
+  --teal-glow2:rgba(15,118,110,0.05);
+  --teal-dark:#c3ccd8;
+  --teal-light:#0f766e;
+  --accent:#b8455a;
+  --accent-glow:rgba(184,69,90,0.1);
+  --amber:#b45309;
+  --red:#c0392b;
+  --green:#2e8b64;
+  --fg:#18212e;
+  --fg2:#3d4859;
+  --muted:#5b6778;
+  --placeholder:#8a95a5;
+  --input-bg:#ffffff;
+  --input-focus:#ffffff;
+  --sbt-bg:#f3f5f8;
+  --rc-bg:#ffffff;
+  --topbar-bg:rgba(255,255,255,0.97);
+  --panel-bg:rgba(255,255,255,0.99);
+  --shadow:rgba(16,24,40,0.12);
+  --modal-bg:rgba(16,24,40,0.45);
+  --grad:linear-gradient(#0f766e,#0f766e);
+  --grad-soft:linear-gradient(rgba(15,118,110,0.06),rgba(15,118,110,0.06));
+  --grad-accent:linear-gradient(#0f766e,#0f766e);
+}
+
+html,body{
+  height:100%;
+  height:100dvh;
+  overflow:hidden;
+  background:var(--bg);color:var(--fg);font-family:var(--font-b);
+  transition:background 0.3s,color 0.3s;
+  overscroll-behavior:none;
+  -webkit-overflow-scrolling:touch;
+}
+#app{display:flex;height:100vh;height:100dvh}
+
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  height:calc(56px + env(safe-area-inset-top));
+  padding-top:env(safe-area-inset-top);
+  background:var(--topbar-bg);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding-left:1.1rem;padding-right:1.1rem;gap:0.85rem;
+  transition:background 0.3s,border-color 0.3s;
+}
+
+.brand{display:flex;align-items:center;gap:0.55rem;text-decoration:none;flex-shrink:0}
+.brand-icon{
+  width:30px;height:30px;border-radius:9px;
+  background:var(--grad);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 14px var(--teal-glow);
+}
+.brand-name{font-family:var(--font-h);font-size:1.05rem;font-weight:700;color:var(--fg)}
+.brand-name span{background:var(--grad-accent);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+#tbadge{
+  display:flex;align-items:center;gap:0.5rem;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:0.28rem 0.75rem 0.28rem 0.6rem;
+  box-shadow:0 2px 10px var(--shadow);
+  transition:border-color 0.25s;
+  flex-shrink:0;
+}
+#tbadge:hover{border-color:var(--teal)}
+#tbadge-slot{
+  display:flex;align-items:center;gap:0.28rem;
+  padding-right:0.5rem;
+  border-right:1px solid var(--border);
+}
+#tbadge-slot-icon{font-size:0.95rem;line-height:1}
+#tbadge-slot-label{
+  font-family:var(--font-h);font-size:0.68rem;font-weight:600;
+  color:var(--teal);letter-spacing:0.06em;text-transform:uppercase;
+}
+#tbadge-clock{
+  font-size:0.82rem;font-weight:700;color:var(--fg);
+  font-variant-numeric:tabular-nums;letter-spacing:0.03em;
+}
+#tbadge-date{font-size:0.6rem;color:var(--muted);font-weight:500;margin-left:0.35rem}
+
+#tbr{margin-left:auto;display:flex;align-items:center;gap:0.55rem;flex-shrink:0}
+#uchip{
+  display:flex;align-items:center;gap:0.4rem;
+  background:var(--teal-glow);border:1px solid rgba(45,212,191,0.2);
+  border-radius:18px;padding:0.28rem 0.75rem;font-size:0.78rem;color:var(--muted);
+}
+#uchip strong{color:var(--fg);font-weight:600}
+.tbtn{
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:18px;padding:0.28rem 0.8rem;font-size:0.74rem;
+  cursor:pointer;font-family:var(--font-b);font-weight:600;transition:all 0.2s;
+}
+.tbtn:hover{border-color:var(--teal);color:var(--teal)}
+#themeBtn{
+  background:var(--sbt-bg);border:1px solid var(--border);
+  border-radius:18px;padding:0.28rem 0.6rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);transition:all 0.2s;
+}
+#themeBtn:hover{border-color:var(--teal);color:var(--teal);transform:scale(1.08)}
+
+#panel{
+  width:var(--panel);height:100vh;height:100dvh;
+  padding-top:calc(56px + env(safe-area-inset-top));
+  background:var(--panel-bg);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:100;overflow:hidden;flex-shrink:0;
+  transition:width 0.35s cubic-bezier(0.4,0,0.2,1),
+             background 0.3s,border-color 0.3s;
+  position:relative;
+}
+#panel.collapsed {
+  width: 0;
+  border-right: none;
+  overflow: hidden;
+}
+@media(max-width:640px) {
+  #panel.collapsed {
+    height: 0;
+    border-top: none;
+  }
+  #mw { height: 100dvh; }
+}
+
+#panel-toggle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 0;
+  z-index: 500;
+  width: 22px;
+  height: 56px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--teal);
+  box-shadow: 3px 0 14px var(--shadow);
+  transition: background 0.2s, color 0.2s;
+}
+#panel-toggle:hover {
+  background: var(--teal-glow);
+  border-color: var(--teal);
+}
+#panel-toggle svg {
+  flex-shrink: 0;
+}
+#panel-toggle svg {
+  transform: rotate(180deg);
+}
+#panel::after{
+  content:'';position:absolute;top:56px;left:0;right:0;height:2px;
+  background:var(--grad);opacity:0.8;pointer-events:none;
+}
+#pi{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:0.7rem}
+#pi::-webkit-scrollbar{width:3px}
+#pi::-webkit-scrollbar-thumb{background:var(--teal-dark);border-radius:3px}
+
+#mw{flex:1;padding-top:calc(56px + env(safe-area-inset-top));position:relative;box-sizing:border-box}
+#map{width:100%;height:100%}
+
+.leaflet-control-attribution{background:rgba(8,15,18,0.75)!important;color:var(--muted)!important;font-size:10px!important}
+.leaflet-control-attribution a{color:var(--teal)!important}
+.leaflet-popup-content-wrapper{background:var(--card)!important;color:var(--fg)!important;border:1px solid var(--border)!important;border-radius:14px!important;box-shadow:0 12px 40px var(--shadow)!important}
+.leaflet-popup-tip{background:var(--card)!important}
+.leaflet-popup-close-button{color:var(--muted)!important}
+
+.sl{
+  font-size:0.62rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:0.13em;margin-bottom:0.38rem;
+  display:flex;align-items:center;gap:0.38rem;
+}
+.sl::before{content:'';width:12px;height:2px;background:var(--grad);border-radius:1px;flex-shrink:0}
+
+.iw{position:relative;display:flex;align-items:center}
+.iw .ic{position:absolute;left:11px;pointer-events:none;z-index:1;display:flex;align-items:center;color:var(--muted)}
+.iw input{
+  width:100%;background:var(--input-bg);
+  border:1.5px solid var(--border);border-radius:12px;
+  color:var(--fg);font-family:var(--font-b);font-size:0.84rem;font-weight:500;
+  padding:0.65rem 0.85rem 0.65rem 2.2rem;outline:none;
+  transition:border-color 0.2s,box-shadow 0.2s,background 0.2s;
+}
+.iw input::placeholder{color:var(--placeholder)}
+.iw input:focus{
+  border-color:var(--teal);
+  box-shadow:0 0 0 3px var(--teal-glow);
+  background:var(--input-focus);
+}
+.sep{display:flex;align-items:center;gap:0.45rem;margin:0.05rem 0}
+.sep .ln{flex:1;height:1px;background:var(--border)}
+.sep .dt{width:7px;height:7px;border-radius:50%;background:var(--grad);flex-shrink:0}
+.hd{height:1px;background:var(--border);margin:0.08rem 0}
+
+.iw-w{position:relative}
+
+.iw-clear {
+  position: absolute;
+  right: 10px; top: 50%; transform: translateY(-50%);
+  z-index: 2;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--border);
+  border: none;
+  color: var(--muted);
+  font-size: 0.7rem; font-weight: 700;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.iw-clear.visible { display: flex; }
+.iw-clear:hover { background: var(--red); color: #fff; }
+
+#nstat-dest-emoji {
+  font-size: 1.1rem;
+  line-height: 1;
+  display: none;
+  margin-bottom: 0.2rem;
+}
+.acd{
+  position:absolute;top:100%;left:0;right:0;
+  background:var(--card2);border:1.5px solid var(--border);
+  border-radius:12px;margin-top:4px;z-index:2000;
+  max-height:208px;overflow-y:auto;
+  box-shadow:0 12px 36px var(--shadow);display:none;
+}
+.acd::-webkit-scrollbar{width:3px}
+.acd::-webkit-scrollbar-thumb{background:var(--teal-dark);border-radius:3px}
+.aci{
+  padding:0.65rem 0.9rem;font-size:0.8rem;cursor:pointer;
+  color:var(--muted);border-bottom:1px solid var(--border);
+  transition:background 0.12s;line-height:1.4;
+}
+.aci:last-child{border-bottom:none}
+.aci:hover{background:var(--teal-glow);color:var(--fg)}
+.aci strong{color:var(--fg);display:block;font-size:0.82rem;font-weight:600}
+.aci-addr{font-size:0.67rem;color:var(--muted);margin-top:0.12rem;line-height:1.3}
+.aci-dist{display:inline-block;font-size:0.61rem;font-weight:700;color:var(--teal);margin-top:0.12rem}
+
+#lbtn{
+  display:flex;align-items:center;justify-content:center;gap:0.45rem;width:100%;
+  padding:0.5rem 1rem;
+  background:var(--grad-soft);
+  border:1.5px dashed rgba(45,212,191,0.3);border-radius:11px;
+  color:var(--teal);font-size:0.77rem;font-weight:600;
+  cursor:pointer;font-family:var(--font-b);transition:all 0.2s;margin-top:0.4rem;
+}
+#lbtn:hover{background:var(--teal-glow);border-color:var(--teal)}
+#lbtn:disabled{opacity:0.5;cursor:not-allowed}
+
+.sw{display:flex;gap:0.3rem;flex-wrap:wrap}
+.sbt{
+  background:var(--sbt-bg);border:1.5px solid var(--border);
+  color:var(--muted);border-radius:18px;padding:0.28rem 0.6rem;
+  font-size:0.7rem;font-weight:600;cursor:pointer;
+  font-family:var(--font-b);transition:all 0.18s;
+}
+.sbt:hover{border-color:var(--teal);color:var(--teal)}
+.sbt.active{
+  background:var(--teal-glow);border-color:var(--teal);
+  color:var(--teal);box-shadow:0 0 0 2px var(--teal-glow);
+}
+
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:0.42rem;
+  width:100%;padding:0.75rem;border:none;border-radius:12px;
+  font-family:var(--font-b);font-size:0.85rem;font-weight:700;
+  letter-spacing:0.01em;cursor:pointer;transition:all 0.22s;
+}
+.bt{background:var(--grad);color:#fff;box-shadow:0 4px 18px var(--teal-glow)}
+.bt:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 8px 24px var(--teal-glow)}
+.bt:disabled{opacity:0.4;cursor:not-allowed;transform:none;filter:none;box-shadow:none}
+.bo{background:transparent;border:1.5px solid var(--border);color:var(--muted)}
+.bo:hover{border-color:var(--teal);color:var(--teal)}
+.br{
+  background:rgba(244,63,94,0.08);
+  border:1.5px solid rgba(244,63,94,0.35);color:#fb7185;
+}
+.br:hover{background:rgba(244,63,94,0.16);transform:translateY(-1px)}
+
+#ltog{display:flex;gap:0.45rem}
+.lbt{
+  flex:1;padding:0.42rem;border-radius:9px;
+  border:1.5px solid var(--border);background:transparent;
+  color:var(--muted);font-size:0.7rem;font-weight:600;
+  font-family:var(--font-b);cursor:pointer;text-align:center;transition:all 0.18s;
+  display:flex;align-items:center;justify-content:center;gap:0.3rem;
+}
+.lbt.on{background:var(--teal-glow);border-color:var(--teal);color:var(--teal)}
+
+#cat-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;
+  background:var(--sbt-bg);border:1.5px solid var(--border);
+  border-radius:9px;padding:0.4rem 0.7rem;
+  color:var(--muted);font-size:0.7rem;font-weight:600;
+  font-family:var(--font-b);cursor:pointer;margin-top:0.4rem;
+  transition:all 0.2s;
+}
+#cat-toggle:hover{border-color:var(--teal);color:var(--teal)}
+#cat-toggle .ct-left{display:flex;align-items:center;gap:0.38rem}
+#cat-toggle .ct-arrow{transition:transform 0.25s;display:flex;align-items:center}
+#cat-toggle.open{border-color:var(--teal);color:var(--teal);background:var(--teal-glow)}
+#cat-toggle.open .ct-arrow{transform:rotate(180deg)}
+#cat-panel{
+  display:none;background:var(--rc-bg);
+  border:1.5px solid var(--border);border-radius:11px;
+  padding:0.55rem;margin-top:0.32rem;
+  animation:fadeIn 0.2s ease;
+}
+#cat-panel.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+.cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.3rem}
+.cat-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0.18rem;
+  background:var(--sbt-bg);border:1.5px solid var(--border);
+  color:var(--muted);border-radius:9px;
+  padding:0.45rem 0.2rem;
+  font-size:0.6rem;font-weight:700;cursor:pointer;
+  font-family:var(--font-b);transition:all 0.16s;text-align:center;
+}
+.cat-btn .cat-icon{font-size:1rem;line-height:1}
+.cat-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-glow);transform:translateY(-1px)}
+.cat-btn.active{background:var(--teal-glow);border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 2px var(--teal-glow)}
+.cat-nearby-hint{
+  font-size:0.62rem;color:var(--muted);text-align:center;
+  margin-top:0.4rem;padding-top:0.38rem;
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;gap:0.28rem;
+}
+
+.rc{
+  background:var(--rc-bg);border:1.5px solid var(--border);
+  border-radius:14px;padding:0.8rem 0.95rem;cursor:pointer;
+  transition:all 0.22s;position:relative;overflow:hidden;margin-bottom:0.45rem;
+}
+.rc::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  border-radius:3px 0 0 3px;background:var(--border);transition:background 0.2s;
+}
+.rc:hover{border-color:rgba(45,212,191,0.3);background:var(--teal-glow2)}
+.rc:hover::before,.rc.sel::before{background:var(--grad)}
+.rc.sel{border-color:var(--teal);background:var(--teal-glow2)}
+.rb{
+  font-size:0.6rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:0.09em;padding:0.18rem 0.48rem;border-radius:18px;
+  display:inline-block;margin-bottom:0.38rem;
+}
+.bs{background:rgba(45,212,191,0.12);color:var(--teal)}
+.bf{background:rgba(245,158,11,0.12);color:var(--amber)}
+.ba{background:var(--sbt-bg);color:var(--muted)}
+.rm{display:flex;gap:0.85rem;margin-top:0.3rem}
+.rs{font-size:0.74rem;color:var(--muted)}
+.rs strong{color:var(--fg);font-weight:600}
+.rp{
+  display:inline-flex;align-items:center;gap:0.28rem;
+  border-radius:18px;padding:0.2rem 0.55rem;
+  font-size:0.69rem;font-weight:700;margin-top:0.38rem;
+}
+.rd{width:5px;height:5px;border-radius:50%}
+
+#ow{
+  background:rgba(245,158,11,0.07);border:1.5px solid rgba(245,158,11,0.22);
+  border-radius:11px;padding:0.65rem 0.8rem;font-size:0.75rem;
+  color:var(--amber);display:none;line-height:1.55;
+}
+#ow a{color:var(--teal)}
+
+.spin{
+  display:inline-block;width:13px;height:13px;
+  border:2px solid rgba(45,212,191,0.2);border-top-color:var(--teal);
+  border-radius:50%;animation:sp 0.65s linear infinite;
+}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.loc-wrap{position:relative;width:20px;height:20px}
+.loc-dot{
+  width:13px;height:13px;border-radius:50%;
+  background:var(--grad);border:2.5px solid #fff;
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  box-shadow:0 2px 8px var(--teal-glow);z-index:2;
+}
+.loc-ring{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--teal-glow);
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  animation:locP 1.8s ease-out infinite;
+}
+.loc-ring2{animation-delay:0.75s!important}
+@keyframes locP{0%{transform:translate(-50%,-50%) scale(0.4);opacity:1}100%{transform:translate(-50%,-50%) scale(2.5);opacity:0}}
+
+.nav-arrow-wrap{position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center}
+.nav-arrow{
+  width:0;height:0;
+  border-left:9px solid transparent;border-right:9px solid transparent;
+  border-bottom:26px solid #2dd4bf;
+  filter:drop-shadow(0 2px 6px rgba(45,212,191,0.7));
+  position:relative;z-index:2;
+  transition:transform 0.15s ease-out;
+  transform-origin:center center;
+}
+.nav-arrow-ring{
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(45,212,191,0.12);border:2px solid rgba(45,212,191,0.35);
+  position:absolute;top:0;left:0;
+  animation:locP 2s ease-out infinite;
+}
+
+#sm{
+  display:none;
+  position:fixed;
+  top:68px;
+  left:calc(var(--panel) + 14px);
+  right:14px;
+  z-index:5000;
+  pointer-events:none;
+  transition: left 0.35s cubic-bezier(0.4,0,0.2,1);
+  animation:slideDown 0.32s cubic-bezier(0.34,1.56,0.64,1);
+}
+#sm.panel-gone { left: 34px; }
+#sm.open{display:block}
+@keyframes slideDown{from{transform:translateY(-16px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+#sb{
+  background:var(--card);
+  border:1.5px solid rgba(244,63,94,0.4);
+  border-left:4px solid var(--red);
+  border-radius:14px;
+  padding:0.82rem 0.95rem;
+  box-shadow:0 8px 32px var(--shadow);
+  display:flex;align-items:center;gap:0.8rem;
+  pointer-events:all;
+  max-width:460px;
+}
+#sp{
+  width:36px;height:36px;border-radius:50%;flex-shrink:0;
+  background:rgba(244,63,94,0.1);border:1.5px solid var(--red);
+  display:flex;align-items:center;justify-content:center;color:var(--red);
+  animation:sosP 1.2s ease-in-out infinite;
+}
+@keyframes sosP{0%,100%{box-shadow:0 0 0 0 rgba(244,63,94,0.5)}60%{box-shadow:0 0 0 10px rgba(244,63,94,0)}}
+#sos-body{flex:1;min-width:0}
+#sos-title{font-family:var(--font-h);font-size:0.86rem;font-weight:700;color:var(--fg);margin-bottom:0.12rem}
+#sst{font-size:0.73rem;color:var(--muted);line-height:1.4}
+#cs{font-size:0.7rem;color:var(--muted);margin-top:0.18rem;display:none;line-height:1.4}
+#sos-actions{display:flex;gap:0.45rem;margin-top:0.45rem;flex-wrap:wrap}
+#sos-voice-hint{font-size:0.67rem;color:rgba(255,255,255,0.4);margin-top:0.35rem;padding-left:4px;display:none}
+@media(max-width:640px){#sm{left:10px;right:10px;top:64px}}
+
+#voice-status{
+  display:flex;align-items:center;gap:0.4rem;
+  font-size:0.72rem;color:var(--muted);margin-top:0.4rem;
+  padding:0.32rem 0.55rem;border-radius:8px;background:rgba(255,255,255,0.04);
+}
+#voice-status .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+#voice-status.listening .dot{background:var(--teal);animation:sosP 1s ease-in-out infinite}
+#voice-status.verified .dot{background:#22c55e}
+#voice-status.mismatch .dot{background:var(--red)}
+
+/* ── Emergency contacts modal ── */
+#contactsModal{display:none;position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:1rem}
+#contactsModal.open{display:flex}
+#contactsBox{width:440px;max-width:100%;max-height:90vh;overflow-y:auto;background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:1.2rem 1.3rem;box-shadow:0 12px 32px -8px var(--shadow)}
+#contactsBox .ec-head{display:flex;align-items:center;justify-content:space-between}
+#contactsBox h3{font-family:var(--font-h);font-size:1rem;color:var(--fg)}
+.ec-count{font-size:0.7rem;font-weight:600;color:var(--muted);margin-left:0.4rem}
+.ec-x{background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0.2rem}
+.ec-sub{font-size:0.76rem;color:var(--muted);line-height:1.5;margin:0.3rem 0 0.8rem}
+.ec-empty{font-size:0.78rem;color:var(--muted);padding:0.6rem 0;line-height:1.5}
+.ec-card{display:flex;gap:0.6rem;justify-content:space-between;align-items:flex-start;border:1px solid var(--border);border-radius:10px;padding:0.6rem 0.7rem;margin-bottom:0.5rem}
+.ec-card.editing{border-color:var(--teal)}
+.ec-info{min-width:0}
+.ec-name{font-weight:700;font-size:0.84rem;color:var(--fg)}
+.ec-line{font-size:0.74rem;color:var(--muted);overflow-wrap:anywhere}
+.ec-badge{font-size:0.62rem;font-weight:700;background:var(--teal);color:#fff;border-radius:99px;padding:1px 7px;margin-left:0.4rem;vertical-align:middle}
+.ec-actions{display:flex;flex-direction:column;gap:0.25rem;flex-shrink:0}
+.ec-actions button{background:transparent;border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:0.2rem 0.55rem;font-size:0.7rem;cursor:pointer;font-family:inherit}
+.ec-actions button:hover{border-color:var(--teal);color:var(--teal)}
+.ec-actions .ec-del:hover{border-color:var(--red);color:var(--red)}
+#ecForm{border-top:1px solid var(--border);margin-top:0.8rem;padding-top:0.8rem}
+.ec-form-title{font-weight:700;font-size:0.82rem;color:var(--fg);margin-bottom:0.4rem}
+#contactsBox select{width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--fg);font-size:0.82rem;font-family:inherit}
+.pf-form label,#ecForm label{display:block;font-size:0.7rem;color:var(--muted);margin:0.45rem 0 0.2rem}
+#pfForm input,#ecForm input{width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--fg);font-size:0.82rem;font-family:inherit}
+.ec-phone{display:flex;align-items:center;gap:0.4rem}
+.ec-phone span{font-size:0.82rem;color:var(--muted)}
+.ec-msg{font-size:0.74rem;min-height:1.1rem;margin:0.5rem 0;line-height:1.4}
+
+#voiceEnrollModal{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:6000;
+  background:rgba(0,0,0,0.55);align-items:center;justify-content:center;
+}
+#voiceEnrollModal.open{display:flex}
+#voiceEnrollBox{
+  width:320px;max-width:90vw;background:var(--card);border:1.5px solid var(--border);
+  border-radius:16px;padding:1.3rem 1.4rem;text-align:center;box-shadow:0 12px 40px var(--shadow);
+}
+#voiceEnrollBox h3{font-family:var(--font-h);font-size:1rem;color:var(--fg);margin-bottom:0.4rem}
+#voiceEnrollBox p{font-size:0.78rem;color:var(--muted);line-height:1.5;margin-bottom:0.9rem}
+#voiceEnrollMic{
+  width:64px;height:64px;border-radius:50%;margin:0 auto 0.9rem;
+  background:radial-gradient(circle at 35% 35%,#5eead4,#0d9488);
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+#voiceEnrollMic.active{animation:sosP 1s ease-in-out infinite}
+#voiceEnrollProgress{font-size:0.74rem;color:var(--teal);font-weight:700;margin-bottom:0.8rem}
+
+#reviewModal{
+  display:none;
+  position:fixed;bottom:1.25rem;right:1.25rem;z-index:5001;
+  width:270px;
+  background:var(--card);
+  border:1.5px solid var(--border);
+  border-radius:18px;
+  padding:1.1rem 1.2rem;
+  box-shadow:0 8px 32px var(--shadow);
+  text-align:center;
+  animation:slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+#reviewModal .rv-close{position:absolute;top:0.6rem;right:0.7rem;background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;line-height:1;padding:0.2rem}
+#reviewModal .rv-actions{display:flex;gap:0.4rem;margin-top:0.9rem}
+#reviewModal .rv-actions button{flex:1;padding:0.5rem;font-size:0.8rem;border-radius:9px;border:1px solid var(--border);cursor:pointer;font-family:inherit;font-weight:700}
+#reviewModal .rv-yes{background:var(--grad);color:#fff;border:none}
+#reviewModal .rv-no{background:transparent;color:var(--fg)}
+#reviewModal .rv-skip{background:transparent;color:var(--muted);flex:0 0 auto;padding:0.5rem 0.7rem}
+
+#toast{
+  position:fixed;bottom:1.4rem;left:50%;
+  transform:translateX(-50%) translateY(70px);
+  background:var(--card2);border:1.5px solid var(--border);
+  border-radius:22px;padding:0.6rem 1.2rem;font-size:0.81rem;font-weight:600;
+  z-index:10000;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  white-space:nowrap;box-shadow:0 8px 28px var(--shadow);
+  pointer-events:none;color:var(--fg);
+}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+#sos-circle {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  z-index: 900;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff6b6b, #e11d48);
+  border: 3px solid rgba(255,255,255,0.25);
+  color: #fff;
+  font-family: var(--font-b);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(225,29,72,0.55), 0 0 0 0 rgba(225,29,72,0.4);
+  transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+  pointer-events: none;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#sos-circle.visible {
+  transform: translateX(-50%) scale(1);
+  pointer-events: all;
+  opacity: 1;
+  animation: sosCirclePulse 2s ease-in-out infinite;
+}
+#sos-circle:hover {
+  box-shadow: 0 6px 32px rgba(225,29,72,0.75), 0 0 0 8px rgba(225,29,72,0.15);
+}
+#sos-circle:active {
+  transform: translateX(-50%) scale(0.93);
+}
+@keyframes sosCirclePulse {
+  0%, 100% { box-shadow: 0 4px 24px rgba(225,29,72,0.55), 0 0 0 0   rgba(225,29,72,0.35); }
+  50%       { box-shadow: 0 4px 24px rgba(225,29,72,0.55), 0 0 0 12px rgba(225,29,72,0); }
+}
+@media(max-width:640px) {
+  #sos-circle { bottom: calc(58vh + 1.5rem); }
+}
+
+#start-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.85rem;
+  background: var(--grad);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-family: var(--font-b);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 20px var(--teal-glow);
+  position: relative;
+  overflow: hidden;
+  transition: filter 0.2s, transform 0.2s;
+}
+#start-nav-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+#start-nav-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -75%;
+  width: 50%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.18), transparent);
+  transform: skewX(-20deg);
+  animation: navShine 2.8s ease-in-out infinite;
+}
+@keyframes navShine {
+  0%   { left: -75%; }
+  40%  { left: 125%; }
+  100% { left: 125%; }
+}
+
+.locate-btn {
+  width: 40px; height: 40px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--teal);
+  box-shadow: 0 2px 12px var(--shadow);
+  transition: all 0.2s;
+  margin-bottom: 6px;
+}
+.locate-btn:hover {
+  background: var(--teal-glow);
+  border-color: var(--teal);
+  transform: scale(1.08);
+}
+.locate-btn.locating {
+  animation: locBtnSpin 1s linear infinite;
+  border-color: var(--teal);
+  background: var(--teal-glow);
+}
+@keyframes locBtnSpin {
+  0%   { box-shadow: 0 0 0 0 var(--teal-glow); }
+  50%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 var(--teal-glow); }
+}
+
+#nav-locate-btn {
+  position: fixed;
+  right: 1rem;
+  z-index: 810;
+  width: 42px; height: 42px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--teal);
+  box-shadow: 0 2px 14px var(--shadow);
+  transition: bottom 0.42s cubic-bezier(0.4,0,0.2,1), opacity 0.25s, transform 0.2s;
+  opacity: 1;
+}
+#nav-locate-btn.nav-visible { display: flex; }
+#nav-locate-btn.nav-hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
+#nav-locate-btn:hover { background: var(--teal-glow); border-color: var(--teal); }
+
+.leaflet-top.leaflet-left {
+  margin-top: 0.6rem;
+  margin-left: 0.6rem;
+}
+.leaflet-bottom.leaflet-left { margin-bottom: 1rem; margin-left: 0.5rem; }
+.leaflet-bottom.leaflet-right {
+  margin-bottom: 1rem;
+  margin-right: 0.5rem;
+}
+
+#map { touch-action: none; }
+
+@media(max-width:640px){
+  #panel{
+    position:fixed;bottom:0;top:auto;width:100%;
+    height:calc(56vh + env(safe-area-inset-bottom));
+    border-right:none;border-top:1.5px solid var(--border);
+    border-radius:20px 20px 0 0;z-index:500;padding-top:0;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #panel::before{
+    content:'';display:block;width:36px;height:3.5px;
+    background:var(--border);border-radius:2px;margin:0.75rem auto 0.2rem;
+  }
+  #panel::after{top:0;border-radius:20px 20px 0 0}
+  #mw{padding-top:calc(56px + env(safe-area-inset-top))}
+  .btn,.sbt,.lbt,.cat-btn,.nd-mode-btn,.nd-route-item{min-height:44px}
+  .nav-btn-sos,.nav-btn-exit{width:70px;height:70px}
+  #nstat-time-val{font-size:2.2rem}
+  .aci{padding:0.8rem 0.9rem;min-height:52px}
+}
+
+#nav-hud {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 800;
+  font-family: var(--font-b);
+}
+#nav-hud.visible { display: block; }
+@keyframes hudSlideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+#nav-sheet {
+  background: var(--panel-bg);
+  border-top: 1.5px solid var(--border);
+  border-left: 1.5px solid var(--border);
+  border-right: 1.5px solid var(--border);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -10px 48px var(--shadow);
+  overflow: hidden;
+  max-height: 88vh;
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.42s cubic-bezier(0.4,0,0.2,1);
+  animation: hudSlideUp 0.44s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+
+#nav-handle {
+  flex-shrink: 0;
+  padding: 0.65rem 1.1rem 0;
+  cursor: pointer;
+  text-align: center;
+}
+#nav-handle::before {
+  content: '';
+  display: inline-block;
+  width: 42px; height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+#nav-sheet:hover #nav-handle::before { background: var(--teal); }
+
+#nav-peek {
+  flex-shrink: 0;
+  padding: 0.7rem 1rem 0.85rem;
+  cursor: pointer;
+}
+
+#nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-btn-sos {
+  flex-shrink: 0;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff6b6b, #e11d48);
+  border: 3px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-family: var(--font-b);
+  font-size: 0.65rem; font-weight: 900;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(225,29,72,0.55), 0 0 0 0 rgba(225,29,72,0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: sosBtnPulse 2.2s ease-in-out infinite;
+}
+.nav-btn-sos:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(225,29,72,0.75);
+}
+.nav-btn-sos:active { transform: scale(0.94); }
+@keyframes sosBtnPulse {
+  0%,100% { box-shadow: 0 4px 20px rgba(225,29,72,0.55), 0 0 0 0   rgba(225,29,72,0.3); }
+  50%      { box-shadow: 0 4px 20px rgba(225,29,72,0.55), 0 0 0 10px rgba(225,29,72,0); }
+}
+
+.nav-btn-exit {
+  flex-shrink: 0;
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  background: var(--card2);
+  border: 2px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 0.62rem; font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.1rem;
+  box-shadow: 0 2px 12px var(--shadow);
+  transition: all 0.2s;
+}
+.nav-btn-exit:hover {
+  border-color: var(--teal); color: var(--teal);
+  transform: scale(1.06);
+  box-shadow: 0 4px 18px var(--teal-glow);
+}
+.nav-btn-exit:active { transform: scale(0.94); }
+
+#nav-stats-center {
+  flex: 1;
+  text-align: center;
+  line-height: 1;
+}
+#nstat-time-val {
+  font-family: var(--font-h);
+  font-size: 2rem; font-weight: 700;
+  color: var(--fg); line-height: 1;
+}
+#nstat-time-lbl {
+  font-size: 0.5rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.14em;
+  margin-top: 0.08rem; margin-bottom: 0.3rem;
+}
+#nav-stats-sub {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.3rem;
+  font-size: 0.74rem; font-weight: 600; color: var(--fg2);
+}
+.nav-sub-dot { color: var(--border); font-size: 0.9rem; line-height: 1; }
+
+#nav-peek-div { height: 1px; background: var(--border); flex-shrink: 0; margin: 0 1rem; }
+
+#nav-scroll {
+  overflow-y: auto;
+  padding: 0 1.1rem;
+  display: flex; flex-direction: column; gap: 0.9rem;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.44s cubic-bezier(0.4,0,0.2,1),
+              padding    0.38s cubic-bezier(0.4,0,0.2,1);
+}
+#nav-scroll.open {
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: 1rem 1.1rem 1.8rem;
+}
+#nav-scroll::-webkit-scrollbar { width: 3px; }
+#nav-scroll::-webkit-scrollbar-thumb { background: var(--teal-dark); border-radius: 3px; }
+
+.nd-sl {
+  font-size: 0.6rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.13em;
+  margin-bottom: 0.45rem;
+  display: flex; align-items: center; gap: 0.38rem;
+}
+.nd-sl::before {
+  content: ''; width: 12px; height: 2px;
+  background: var(--grad); border-radius: 1px; flex-shrink: 0;
+}
+
+.nd-mode-sw { display: flex; gap: 0.35rem; }
+.nd-mode-btn {
+  flex: 1; padding: 0.52rem 0.3rem;
+  background: var(--sbt-bg); border: 1.5px solid var(--border);
+  border-radius: 10px; color: var(--muted);
+  font-size: 0.7rem; font-weight: 700; font-family: var(--font-b);
+  cursor: pointer; text-align: center; transition: all 0.16s;
+}
+.nd-mode-btn:hover { border-color: var(--teal); color: var(--teal); }
+.nd-mode-btn.active { background: var(--teal-glow); border-color: var(--teal); color: var(--teal); }
+
+.nd-route-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.nd-route-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  background: var(--rc-bg); border: 1.5px solid var(--border);
+  border-radius: 12px; cursor: pointer; transition: all 0.16s;
+  position: relative; overflow: hidden;
+}
+.nd-route-item::before {
+  content: ''; width: 3px;
+  position: absolute; left: 0; top: 0; bottom: 0;
+  border-radius: 3px 0 0 3px; background: var(--border);
+}
+.nd-route-item:hover, .nd-route-item.sel { border-color: var(--teal); background: var(--teal-glow2); }
+.nd-route-item.sel::before { background: var(--grad); }
+.nd-route-item .ndr-label { font-size: 0.78rem; font-weight: 700; color: var(--fg); }
+.nd-route-item .ndr-meta { font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
+.nd-route-item .ndr-badge {
+  font-size: 0.58rem; font-weight: 700; padding: 0.18rem 0.44rem;
+  border-radius: 18px; background: var(--teal-glow); color: var(--teal);
+  flex-shrink: 0; margin-left: 0.45rem;
+}
+
+.nd-div { height: 1px; background: var(--border); }
+
+.layer-ctrl-btn { outline: none; }
+.layer-ctrl-btn.heat-on  { background: rgba(245,158,11,0.18) !important; border-color: #f59e0b !important; color: #f59e0b !important; }
+.layer-ctrl-btn.zone-on  { background: rgba(244,63,94,0.15)  !important; border-color: #f43f5e !important; color: #f43f5e  !important; }
+
+@supports (-webkit-touch-callout: none) {
+  html { -webkit-text-size-adjust: 100%; }
+  input, select, textarea { font-size: 16px !important; }
+  #pi { -webkit-overflow-scrolling: touch; }
+  * { -webkit-tap-highlight-color: transparent; }
+}
+
+@media screen and (max-width: 640px) {
+  html, body { height: 100dvh; min-height: 100dvh; }
+  #app { height: 100dvh; min-height: 100dvh; }
+  input, select, textarea { font-size: 16px !important; }
+  .btn, .sbt, .lbt, .tbtn, .nd-mode-btn { min-height: 44px; }
+  .cat-btn { min-height: 52px; }
+  .aci { min-height: 52px; padding: 0.85rem 0.9rem; }
+  .nav-btn-sos, .nav-btn-exit { width: 68px; height: 68px; }
+  #pi, #nav-scroll, #nav-drawer-inner {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+  button, a { touch-action: manipulation; }
+  .layer-ctrl-btn { width: 40px !important; height: 40px !important; }
+  .locate-btn { width: 44px; height: 44px; }
+  #uchip { display: none; }
+  .brand-name { font-size: 0.95rem; }
+  #tbadge-date { display: none; }
+  .rc { padding: 0.9rem 1rem; }
+  .nd-route-item { padding: 0.65rem 0.85rem; min-height: 52px; }
+  .acd { max-height: 240px; }
+  #sb { max-width: 100%; }
+}
+
+@media screen and (max-width: 380px) {
+  :root { --panel: 100%; }
+  #tbadge-slot-label { display: none; }
+  #nstat-time-val { font-size: 1.7rem; }
+  .nav-btn-sos, .nav-btn-exit { width: 58px; height: 58px; }
+  #nav-stats-sub { font-size: 0.65rem; }
+}
+/* Dark look for keyless OpenStreetMap tiles */
+.sp-osm-dark{filter:invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.6)}
+
+/* ============================================================
+   PRESENTATION LAYER — flat, neutral, civic styling.
+   Colour / type / surface treatment only: no sizes, spacing or
+   positions are changed.
+   ============================================================ */
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::selection{background:var(--teal-glow);}
+
+/* top bar & brand */
+#topbar{box-shadow:0 1px 2px rgba(16,24,40,0.05)}
+.brand-icon{background:var(--teal);box-shadow:none;border-radius:8px;color:#fff}
+html:not(.light) .brand-icon{color:#0f141b}
+.brand-name{font-weight:700;letter-spacing:0.01em}
+.brand-name span{background:none!important;-webkit-text-fill-color:currentColor!important;color:var(--teal)}
+#tbadge{background:var(--card);box-shadow:none;border-radius:8px}
+#tbadge-slot-label{font-family:var(--font-b);font-weight:700;letter-spacing:0.08em}
+#uchip{background:var(--sbt-bg);border:1px solid var(--border);border-radius:8px}
+.tbtn,#themeBtn{border-radius:8px;box-shadow:none}
+.tbtn{font-weight:600}
+#themeBtn:hover{transform:none}
+#panel{box-shadow:none}
+#panel::after{background:var(--teal);opacity:1;height:2px}
+
+/* section labels */
+.sl,.nd-sl{color:var(--muted);letter-spacing:0.1em;font-weight:700}
+.sl::before,.nd-sl::before{background:var(--teal)}
+.sep .dt{background:var(--border)}
+
+/* inputs */
+.iw input{border:1.5px solid var(--border);border-radius:8px;box-shadow:none;background:var(--input-bg)}
+.iw input:hover{border-color:var(--muted)}
+.iw input:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-glow);background:var(--input-focus)}
+.acd{border-radius:8px;box-shadow:0 8px 24px -6px var(--shadow)}
+.aci:hover{background:var(--teal-glow2)}
+
+/* buttons */
+#lbtn{border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--teal)}
+#lbtn:hover{background:var(--teal-glow2);border-color:var(--teal)}
+.btn{border-radius:8px}
+.bt,#start-nav-btn{background:var(--teal)!important;color:#fff;box-shadow:0 1px 2px rgba(16,24,40,0.15)}
+html:not(.light) .bt,html:not(.light) #start-nav-btn{color:#0f141b}
+.bt:hover,#start-nav-btn:hover{background:var(--teal-dim)!important;filter:none;transform:none;box-shadow:0 2px 6px rgba(16,24,40,0.2)}
+#start-nav-btn{border-radius:8px}
+#start-nav-btn::after{display:none}                     /* remove animated shine */
+.br{background:transparent;border:1.5px solid var(--red);color:var(--red)}
+.br:hover{background:rgba(192,57,43,0.08);transform:none}
+.sbt,.lbt,.nd-mode-btn,#cat-toggle,.cat-btn{border-radius:8px;background:var(--card)}
+.sbt{padding-left:0.6rem;font-weight:600}
+.sbt.active,.lbt.on,.nd-mode-btn.active,.cat-btn.active,#cat-toggle.open{background:var(--teal);border-color:var(--teal);color:#fff;box-shadow:none}
+html:not(.light) .sbt.active,html:not(.light) .lbt.on,html:not(.light) .nd-mode-btn.active,html:not(.light) .cat-btn.active,html:not(.light) #cat-toggle.open{color:#0f141b}
+.cat-btn:hover{transform:none;background:var(--teal-glow2)}
+#cat-panel{border-radius:8px;background:var(--card2)}
+
+/* route cards */
+.rc,.nd-route-item{border-radius:8px;box-shadow:none}
+.rc::before{background:var(--border)}
+.rc.sel,.nd-route-item.sel{box-shadow:none;background:var(--teal-glow2);border-color:var(--teal)}
+.rb{border-radius:4px;letter-spacing:0.06em}
+.rp{border-radius:4px}
+.ndr-badge{border-radius:4px!important}
+#ow{border-radius:8px}
+
+/* overlays */
+#sb,#reviewModal,#voiceEnrollBox,#nav-sheet{box-shadow:0 12px 32px -8px var(--shadow)}
+#sb{border-radius:10px}
+#reviewModal,#voiceEnrollBox,#contactsBox{border-radius:12px}
+#toast{border-radius:8px;box-shadow:0 8px 24px -6px var(--shadow)}
+#nav-sheet{border-radius:16px 16px 0 0}
+#sp{animation:none}
+.locate-btn,#nav-locate-btn,#panel-toggle{box-shadow:0 1px 3px var(--shadow);border-radius:8px}
+.locate-btn:hover{transform:none}
+#nstat-time-val{font-weight:700}
+.loc-dot{background:var(--teal);box-shadow:none}
+.loc-ring{background:var(--teal-glow)}
+.nav-arrow{border-bottom-color:var(--teal);filter:none}
+.nav-arrow-ring{background:var(--teal-glow);border-color:var(--teal)}
+#voiceEnrollMic{background:var(--teal);color:#fff}
+.nav-btn-sos,#sos-circle{background:#c0392b;border-color:rgba(255,255,255,0.35);box-shadow:0 2px 8px rgba(192,57,43,0.35);animation:none}
+#sos-circle.visible{animation:none}
+.nav-btn-exit{box-shadow:0 1px 3px var(--shadow)}
+
+/* map chrome */
+.leaflet-popup-content-wrapper{border-radius:10px!important;box-shadow:0 10px 28px -8px var(--shadow)!important}
+.leaflet-bar{box-shadow:0 0 0 1px var(--border),0 1px 3px var(--shadow)!important;border-radius:8px!important;overflow:hidden}
+.leaflet-bar a{background:var(--card)!important;color:var(--fg)!important;border-bottom-color:var(--border)!important}
+.leaflet-bar a:hover{background:var(--teal-glow)!important;color:var(--teal)!important}
+.leaflet-control-attribution{background:var(--card)!important;opacity:.92}
+
+/* assistant */
+#spc-fab{background:var(--teal);color:#fff;box-shadow:0 2px 8px var(--shadow)}
+html:not(.light) #spc-fab{color:#0f141b}
+#spc-fab:hover{transform:none;filter:brightness(1.08)}
+#spc-box{border-radius:12px;box-shadow:0 16px 40px -10px var(--shadow)}
+.spc-h{background:var(--card2)}
+.spc-m{border-radius:10px}
+.spc-m.u{background:var(--teal);color:#fff}
+html:not(.light) .spc-m.u{color:#0f141b}
+.spc-opt,.spc-act,.spc-chips button{border-radius:8px}
+.spc-in input{border-radius:8px}
+.spc-in button{background:var(--teal);color:#fff;border-radius:8px}
+html:not(.light) .spc-in button{color:#0f141b}
+
+button:focus-visible,a:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.iw input:focus-visible{outline:none}
+#pi::-webkit-scrollbar-thumb:hover,.acd::-webkit-scrollbar-thumb:hover,#nav-scroll::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+  <!-- EmailJS v4 for automatic SOS email alerts -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" crossorigin="anonymous"></script>
+  <script>emailjs.init({ publicKey: 'f3wxAQQr34cXhDnsi' });</script>
+  <!-- Regional language switcher (Hindi, Bengali, Tamil, Telugu, and other Indian state languages) -->
+  <script src="js/i18n.js"></script>
+  <script src="js/ui-icons.js" defer></script>
+</head>
+<body>
+
+<div id="topbar">
+  <a href="#" class="brand">
+    <div class="brand-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <div class="brand-name">Safe<span>Path</span></div>
+  </a>
+
+  <div id="tbadge" aria-label="Current time and safety slot">
+    <div id="tbadge-slot">
+      <span id="tbadge-slot-icon">🌅</span>
+      <span id="tbadge-slot-label">Morning</span>
+    </div>
+    <span id="tbadge-clock">--:--:--</span>
+    <span id="tbadge-date">---</span>
+  </div>
+
+  <div id="tbr">
+    <div id="uchip">Welcome, <strong id="ufirst">…</strong></div>
+    <div id="lang-switcher-root"></div>
+    <button id="themeBtn" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+      <svg id="icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg id="icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+    <button class="tbtn" id="contactsBtn" onclick="openContactsModal()">👤 My Profile</button>
+    <button class="tbtn" id="voiceSetupBtn" onclick="openVoiceEnroll()">🎙️ Voice Safety</button>
+    <button class="tbtn" onclick="signOut()">Sign Out</button>
+  </div>
+</div>
+
+<div id="contactsModal">
+  <div id="contactsBox">
+    <div class="ec-head">
+      <h3>My Profile</h3>
+      <button class="ec-x" onclick="closeContactsModal()" aria-label="Close">✕</button>
+    </div>
+    <div id="pfForm" class="pf-form">
+      <div class="ec-form-title">Your details</div>
+      <label for="pfName">Full name</label>
+      <input id="pfName" type="text" autocomplete="off"/>
+      <div style="display:flex;gap:0.5rem">
+        <div style="flex:1"><label for="pfAge">Age</label><input id="pfAge" type="number" min="10" max="100"/></div>
+        <div style="flex:2"><label for="pfGender">Gender</label>
+          <select id="pfGender"><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select></div>
+      </div>
+      <label for="pfOcc">Occupation</label>
+      <select id="pfOcc"><option>Student</option><option>Working Professional</option><option>Night Shift Worker</option><option>Homemaker</option><option>Freelancer</option><option>Healthcare Worker</option><option>Other</option></select>
+      <label for="pfEmail">Email</label>
+      <input id="pfEmail" type="email" autocomplete="off" placeholder="you@example.com"/>
+      <label>Phone (used to sign in)</label>
+      <input id="pfPhone" type="text" disabled/>
+      <div id="pfMsg" class="ec-msg"></div>
+      <button class="btn bt" style="width:auto;padding:0.55rem 1rem;font-size:0.82rem" id="pfSaveBtn" onclick="saveProfileForm()">Save details</button>
+    </div>
+    <div class="ec-head" style="margin-top:1.1rem;border-top:1px solid var(--border);padding-top:0.9rem">
+      <h3>Emergency Contacts <span id="ecCount" class="ec-count"></span></h3>
+    </div>
+    <p class="ec-sub">When you trigger SOS, <strong>every</strong> contact below gets an email with your live location.</p>
+    <div id="ecList"></div>
+    <div id="ecFull" style="display:none" class="ec-empty">You've reached the limit of 5 contacts. Remove one to add another.</div>
+    <div id="ecForm">
+      <div class="ec-form-title" id="ecFormTitle">Add a contact</div>
+      <label for="ecName">Name</label>
+      <input id="ecName" type="text" autocomplete="off" placeholder="e.g. Mom"/>
+      <label for="ecPhone">Mobile number</label>
+      <div class="ec-phone"><span>+91</span><input id="ecPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number" oninput="this.value=this.value.replace(/\D/g,'')"/></div>
+      <label for="ecEmail">Email</label>
+      <input id="ecEmail" type="email" autocomplete="off" placeholder="contact@example.com"/>
+      <div id="ecMsg" class="ec-msg"></div>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn bt" style="flex:1;width:auto;padding:0.55rem;font-size:0.82rem" id="ecSaveBtn" onclick="ecSubmit()">Add contact</button>
+        <button class="btn bo" style="flex:0 0 auto;width:auto;padding:0.55rem 0.9rem;font-size:0.78rem;display:none" id="ecCancelEdit" onclick="ecCancelEdit()">Cancel edit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="voiceEnrollModal">
+  <div id="voiceEnrollBox">
+    <div id="voiceEnrollMic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </div>
+    <h3 id="voiceEnrollTitle">Set Up Voice Safety Check</h3>
+    <p id="voiceEnrollDesc">During an SOS alert, the check-in timer will only reset when it hears <strong>your</strong> voice say "I'm safe" — not just anyone's. We'll record 3 short samples of your voice now (takes ~15 seconds).</p>
+    <div style="text-align:left;margin-top:0.6rem">
+      <label for="voiceEnrollLangSelect" style="font-size:0.72rem;color:var(--muted);display:block;margin-bottom:0.3rem">Language you'll speak in during SOS checks</label>
+      <select id="voiceEnrollLangSelect" onchange="onVoiceEnrollLangChange(this.value)"
+        style="width:100%;padding:0.5rem 0.6rem;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--fg);font-size:0.82rem"></select>
+    </div>
+    <p id="voiceEnrollLangHint" style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;"></p>
+    <div id="voiceEnrollProgress" style="display:none"></div>
+    <div style="display:flex;gap:0.5rem">
+      <button class="btn bt" style="flex:1;padding:0.55rem;font-size:0.82rem" id="voiceEnrollStartBtn" onclick="startVoiceEnrollment()">Start Recording</button>
+      <button class="btn bo" style="flex:1;padding:0.55rem;font-size:0.78rem" onclick="closeVoiceEnroll()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="panel">
+    <div id="pi">
+
+      <div id="ow">
+        Routing API key required. Get a free key at
+        <a href="https://openrouteservice.org/dev/#/signup" target="_blank">openrouteservice.org</a>
+        and paste it into dashboard.html line 9.
+      </div>
+
+      <div>
+        <div class="sl">Origin</div>
+        <div class="iw-w">
+          <div class="iw">
+            <span class="ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+            <input id="inp-from" type="text" placeholder="Starting point in Mumbai" oninput="acSearch(this.value,'from')" autocomplete="off"/>
+          </div>
+          <div class="acd" id="ac-from"></div>
+        </div>
+        <button id="lbtn" onclick="useMyLocation()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></svg>
+          Use my current location
+        </button>
+      </div>
+
+      <div class="sep"><div class="ln"></div><div class="dt"></div><div class="ln"></div></div>
+
+      <div>
+        <div class="sl">Destination</div>
+        <div class="iw-w">
+          <div class="iw">
+            <span class="ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
+            <input id="inp-to" type="text" placeholder="Type any place — Churchgate, IIT, Juhu Beach…" oninput="acSearch(this.value,'to');updateToClear()" autocomplete="off" style="padding-right:2rem"/>
+            <button class="iw-clear" id="to-clear" onclick="clearDestination()" title="Clear destination">×</button>
+          </div>
+          <div class="acd" id="ac-to"></div>
+        </div>
+        <button id="cat-toggle" onclick="toggleCatFilters()">
+          <span class="ct-left">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Browse nearby places
+          </span>
+          <span class="ct-arrow">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </span>
+        </button>
+        <div id="cat-panel">
+          <div class="cat-grid">
+            <button class="cat-btn" onclick="catSearch('station','to',this)"><span class="cat-icon">🚉</span>Station</button>
+            <button class="cat-btn" onclick="catSearch('hospital','to',this)"><span class="cat-icon">🏥</span>Hospital</button>
+            <button class="cat-btn" onclick="catSearch('school','to',this)"><span class="cat-icon">🏫</span>School</button>
+            <button class="cat-btn" onclick="catSearch('college','to',this)"><span class="cat-icon">🎓</span>College</button>
+            <button class="cat-btn" onclick="catSearch('park','to',this)"><span class="cat-icon">🌳</span>Park</button>
+            <button class="cat-btn" onclick="catSearch('bank','to',this)"><span class="cat-icon">🏦</span>Bank</button>
+            <button class="cat-btn" onclick="catSearch('beach','to',this)"><span class="cat-icon">🏖️</span>Beach</button>
+            <button class="cat-btn" onclick="catSearch('post office','to',this)"><span class="cat-icon">📮</span>Post Office</button>
+            <button class="cat-btn" onclick="catSearch('temple','to',this)"><span class="cat-icon">🛕</span>Temple</button>
+            <button class="cat-btn" onclick="catSearch('mall','to',this)"><span class="cat-icon">🛒</span>Mall</button>
+            <button class="cat-btn" onclick="catSearch('hotel','to',this)"><span class="cat-icon">🏨</span>Hotel</button>
+            <button class="cat-btn" onclick="catSearch('police','to',this)"><span class="cat-icon">👮</span>Police</button>
+            <button class="cat-btn" onclick="catSearch('pharmacy','to',this)"><span class="cat-icon">💊</span>Pharmacy</button>
+            <button class="cat-btn" onclick="catSearch('atm','to',this)"><span class="cat-icon">🏧</span>ATM</button>
+            <button class="cat-btn" onclick="catSearch('restaurant','to',this)"><span class="cat-icon">🍽️</span>Restaurant</button>
+          </div>
+          <div class="cat-nearby-hint">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            Nearest first — based on your current location
+          </div>
+        </div>
+
+        <button class="btn bt" id="bfind" onclick="findRoutes()" style="display:none;margin-top:0.65rem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><path d="M6 17V7a2 2 0 0 1 2-2h8"/><circle cx="18" cy="5" r="2"/></svg>
+          Find Safest Route
+        </button>
+      </div>
+
+      <div class="hd" id="mode-div-top" style="display:none"></div>
+
+      <div id="mode-section" style="display:none">
+        <div class="sl">Travel Mode</div>
+        <div class="sw" id="mode-sw">
+          <button class="sbt active" data-mode="foot-walking" onclick="setMode(this)">🚶 Walking</button>
+          <button class="sbt" data-mode="cycling-regular" onclick="setMode(this)">🚲 Cycling</button>
+          <button class="sbt" data-mode="driving-car" onclick="setMode(this)">🚗 Driving</button>
+        </div>
+      </div>
+
+      <div class="hd" id="mode-div-bottom" style="display:none"></div>
+
+      <div id="rsec" style="display:none">
+        <div class="sl">Route Options</div>
+        <div id="rcards"></div>
+        <button id="start-nav-btn" onclick="startNavigation()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start Navigation
+        </button>
+      </div>
+
+      <div class="hd"></div>
+      <div>
+        <div class="sl">Emergency</div>
+        <button class="btn br" onclick="openSOS()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          I Feel Unsafe — Send SOS
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="panel-toggle" onclick="openPanel()" title="Open sidebar">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </div>
+
+  <div id="mw">
+    <div id="map"></div>
+    <button id="sos-circle" onclick="openSOS()">
+      <span>SOS</span>
+    </button>
+
+    <button id="nav-locate-btn" onclick="centreOnUser()" title="Centre on my location">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        <circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div id="sm">
+  <div id="sb">
+    <div id="sp">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div id="sos-body">
+      <div id="sos-title">Emergency Alert Active</div>
+      <div id="sst" style="font-size:0.73rem;color:var(--muted);line-height:1.4">Notifying your emergency contacts with live location.</div>
+      <div id="cs"></div>
+      <div id="voice-status">
+        <span class="dot"></span>
+        <span id="voice-status-text">Say "I'm safe" — your voice will be verified</span>
+      </div>
+      <div id="sos-actions">
+  <button id="manual-safe-btn" onclick="manualConfirmSafe()" style="display:none;align-items:center;gap:0.32rem;background:var(--grad);color:#fff;border:none;border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:700;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Tap Instead (no voice set up)
+  </button>
+
+  <button onclick="closeSOS()" style="display:inline-flex;align-items:center;gap:0.32rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;padding:0.35rem 0.7rem;font-size:0.74rem;font-weight:600;font-family:var(--font-b);cursor:pointer;transition:all 0.2s">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel
+  </button>
+</div>
+    </div>
+  </div>
+  <p id="sos-voice-hint"></p>
+</div>
+
+<div id="reviewModal">
+  <button class="rv-close" onclick="closeReviewModalAttempt()" aria-label="Close">✕</button>
+  <div style="height:2.5px;background:var(--grad);border-radius:18px;margin-bottom:1rem"></div>
+  <p style="font-family:var(--font-h);font-size:0.98rem;font-weight:700;color:var(--fg);margin-bottom:0.25rem">Journey Complete! 🎉</p>
+  <p style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem">Did this place feel safe just now?</p>
+  <p id="rvPlaceName" style="font-family:var(--font-h);font-size:0.92rem;font-weight:700;color:var(--teal)"></p>
+  <div class="rv-actions">
+    <button class="rv-no" onclick="answerReviewDash('no')">No</button>
+    <button class="rv-yes" onclick="answerReviewDash('yes')">Yes</button>
+  </div>
+  <button class="rv-skip" style="margin-top:0.5rem;background:none;border:none" onclick="answerReviewDash('skip')">Skip this one</button>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<!-- UPDATED: Removed firebase-config.js and auth.js — loaded in <head> now -->
+<script src="js/crime-data.js"></script>
+<script src="js/voice-lang.js"></script>
+<script src="js/voice-auth.js"></script>
+<script src="js/safety-features.js"></script>
+<script src="js/emergency-contacts.js"></script>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+let map, heatLayer, tileLayer;
+let liveWatchId   = null;
+let liveMarker    = null;
+let zoneMarkers   = [];
+let routeLayers   = [];
+let crimeZones    = [];
+let curRoutes     = [];
+let selIdx        = 0;
+let travelMode    = 'foot-walking';
+let curUser       = null;
+let activeAlertId = null;
+let voiceChecker  = null;
+let heatOn        = true;
+let zonesOn       = true;
+let trackingOn    = false;
+let fromCoords    = null;
+let toCoords      = null;
+let locMarker     = null;
+let locAccCircle  = null;
+let fromMarker    = null;
+let toMarker      = null;
+let _zoneCache    = null;
+let _zoneCacheSlot= null;
+let _zonesBuiltForSlot = null;
+let _journeyEnded = false;
+let _ratingAdjustments = [];
+let _ratingsFetched = false;
+let _waypointZones = [];    // synthetic risk zones from crowd-sourced waypoint reviews (per time-of-day slot)
+
+const SH = { morning:8, afternoon:13, evening:18, night:22 };
+const SN = { morning:'Morning', afternoon:'Afternoon', evening:'Evening', night:'Night' };
+const SLOT_ICONS  = { morning:'🌅', afternoon:'☀️', evening:'🌆', night:'🌙' };
+const SLOT_COLORS = { morning:'#f59e0b', afternoon:'#2dd4bf', evening:'#c084fc', night:'#7ee8d4' };
+const MAX_SAMPLE  = 60;
+const WARN_BUFFER = 50;
+const REMINDER_MIN_RISK = 6.0;
+const REMINDER_INTERVAL_MS = 75000;
+
+const zoneStates     = new Map();
+const reminderTimers = new Map();
+
+// Builds the base map layer for the current theme.
+//  • With window.CARTO_API_KEY set  -> CARTO dark/light tiles (with ?key=)
+//  • Without a key                  -> OpenStreetMap tiles (dark mode via CSS filter)
+function makeTileLayer(isLight) {
+  const key = (window.CARTO_API_KEY || '').trim();
+  if (key) {
+    return L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/' + (isLight ? 'light_all' : 'dark_all') + '/{z}/{x}/{y}{r}.png?key=' + encodeURIComponent(key),
+      { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 19 }
+    );
+  }
+  return L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+    className: isLight ? '' : 'sp-osm-dark'
+  });
+}
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+async function initApp() {
+  if (window.ORS_API_KEY === 'YOUR_ORS_API_KEY')
+    document.getElementById('ow').style.display = 'block';
+
+  map = L.map('map', {
+    zoomControl: false,
+    scrollWheelZoom: true,
+    dragging: true,
+    touchZoom: true,
+    doubleClickZoom: true,
+    boxZoom: false,
+    tap: true,
+  }).setView([19.076, 72.8777], 12);
+
+  const LocateControl = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd: function() {
+      const btn = L.DomUtil.create('button', 'locate-btn');
+      btn.title = 'Centre on my location';
+      btn.innerHTML =
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+        + 'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        + '<circle cx="12" cy="12" r="3"/>'
+        + '<path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'
+        + '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>'
+        + '</svg>';
+      L.DomEvent.disableClickPropagation(btn);
+      L.DomEvent.on(btn, 'click', function() { centreOnUser(); });
+      return btn;
+    }
+  });
+  map.addControl(new LocateControl());
+
+  const LayerControl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function() {
+      const wrap = L.DomUtil.create('div', 'layer-ctrl-wrap');
+      wrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;margin-top:4px;';
+
+      function mkBtn(id, title, svgPath) {
+        const btn = L.DomUtil.create('button', 'layer-ctrl-btn');
+        btn.id = id;
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + svgPath + '</svg>';
+        btn.style.width          = '36px';
+        btn.style.height         = '36px';
+        btn.style.borderRadius   = '9px';
+        btn.style.display        = 'flex';
+        btn.style.alignItems     = 'center';
+        btn.style.justifyContent = 'center';
+        btn.style.cursor         = 'pointer';
+        btn.style.transition     = 'all 0.2s';
+        btn.style.background     = 'var(--card)';
+        btn.style.border         = '1.5px solid var(--border)';
+        btn.style.color          = 'var(--teal)';
+        btn.style.boxShadow      = '0 2px 8px rgba(0,0,0,0.4)';
+        btn.style.outline        = 'none';
+        return btn;
+      }
+
+      const heatBtn = mkBtn('map-lheat', 'Toggle Crime Heatmap',
+        '<path d="M12 2c0 6-6 6-6 12a6 6 0 0 0 12 0c0-6-6-6-6-12z"/>');
+      const zoneBtn = mkBtn('map-lzone', 'Toggle Risk Zones',
+        '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>');
+
+      function syncBtn(btn, isHeat, on) {
+        if (isHeat) {
+          btn.style.background  = on ? 'rgba(245,158,11,0.22)' : 'var(--card)';
+          btn.style.borderColor = on ? '#f59e0b'               : 'var(--border)';
+          btn.style.color       = on ? '#f59e0b'               : 'var(--teal)';
+          btn.style.boxShadow   = on ? '0 0 0 3px rgba(245,158,11,0.25),0 2px 8px var(--shadow)' : '0 2px 8px var(--shadow)';
+        } else {
+          btn.style.background  = on ? 'rgba(244,63,94,0.18)'  : 'var(--card)';
+          btn.style.borderColor = on ? '#f43f5e'               : 'var(--border)';
+          btn.style.color       = on ? '#f43f5e'               : 'var(--teal)';
+          btn.style.boxShadow   = on ? '0 0 0 3px rgba(244,63,94,0.2),0 2px 8px var(--shadow)'  : '0 2px 8px var(--shadow)';
+        }
+      }
+      syncBtn(heatBtn, true,  heatOn);
+      syncBtn(zoneBtn, false, zonesOn);
+
+      L.DomEvent.disableClickPropagation(wrap);
+      L.DomEvent.on(heatBtn, 'click', function() {
+        toggleHeat();
+        syncBtn(heatBtn, true, heatOn);
+      });
+      L.DomEvent.on(zoneBtn, 'click', function() {
+        toggleZones();
+        syncBtn(zoneBtn, false, zonesOn);
+      });
+
+      wrap.appendChild(heatBtn);
+      wrap.appendChild(zoneBtn);
+      return wrap;
+    }
+  });
+  map.addControl(new LayerControl());
+
+  const isLight = document.documentElement.classList.contains('light');
+  tileLayer = makeTileLayer(isLight).addTo(map);
+
+crimeZones = await getCrimeZones();
+buildHeat();
+buildZones();
+fetchRatingAdjustments();
+
+  // UPDATED: Supabase auth — .id instead of .uid, fetch profile from public.users table
+  onAuthStateChanged(async user => {
+    if (!user) {
+      if (!sessionStorage.getItem('signing_out')) {
+        window.location.href = 'index.html';
+      }
+      return;
+    }
+
+    curUser = user;
+    try {
+      const { data } = await window.supabase
+        .from('users')
+        .select('name')
+        .eq('auth_id', user.id)
+        .single();
+      if (data && data.name) {
+        // Decrypt name before displaying
+        const key = await getCryptoKey(user.id);
+        const decryptedName = await decryptText(data.name, key);
+        document.getElementById('ufirst').textContent = decryptedName.split(' ')[0];
+      }
+    } catch(e) {
+      console.warn('Could not load user profile:', e);
+    }
+  });
+}
+
+// ════════════════════════════════════════
+// CLOCK
+// ════════════════════════════════════════
+let _lastAutoSlot = null;
+
+function startClock() {
+  function tick() {
+    const now    = new Date();
+    const hh     = now.getHours().toString().padStart(2, '0');
+    const mm     = now.getMinutes().toString().padStart(2, '0');
+    const ss     = now.getSeconds().toString().padStart(2, '0');
+    const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const dateStr= days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()];
+
+    const clockEl = document.getElementById('tbadge-clock');
+    const dateEl  = document.getElementById('tbadge-date');
+    if (clockEl) clockEl.textContent = hh + ':' + mm + ':' + ss;
+    if (dateEl)  dateEl.textContent  = dateStr;
+
+    const slot = getTimeSlot(now.getHours());
+    if (slot !== _lastAutoSlot) {
+      _lastAutoSlot = slot;
+      applySlot(slot);
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+function getTimeSlot(h) {
+  if (h >= 5  && h < 12) return 'morning';
+  if (h >= 12 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 21) return 'evening';
+  return 'night';
+}
+
+function applySlot(slot) {
+  const icon  = document.getElementById('tbadge-slot-icon');
+  const label = document.getElementById('tbadge-slot-label');
+  if (icon)  icon.textContent  = SLOT_ICONS[slot]  || '🕐';
+  if (label) {
+    label.textContent = SN[slot];
+    label.style.color = SLOT_COLORS[slot] || 'var(--teal)';
+  }
+  if (crimeZones.length) {
+    _zoneCache = null;
+    buildHeat();
+    buildZones();
+  }
+}
+
+// ════════════════════════════════════════
+// HEATMAP
+// ════════════════════════════════════════
+function buildHeat() {
+  if (heatLayer) map.removeLayer(heatLayer);
+  const h   = SH[_lastAutoSlot] || new Date().getHours();
+  const sl  = getTimeSlot(h);
+  const mul = TIME_MULTIPLIERS[sl];
+  const pts = crimeZones.map(z => {
+    let b = z.baseRisk;
+    if ((sl === 'night' || sl === 'evening') && z.nightOverride) b = z.nightOverride;
+    return [z.lat, z.lng, Math.min(b * mul, 10) / 10];
+  });
+  heatLayer = L.heatLayer(pts, {
+    radius:40, blur:30, maxZoom:14,
+    gradient:{0:'transparent',0.15:'#0891b2',0.4:'#f59e0b',0.65:'#f97316',0.85:'#e8607a',1:'#f43f5e'}
+  });
+  if (heatOn) heatLayer.addTo(map);
+}
+
+function toggleHeat() {
+  heatOn = !heatOn;
+  heatOn ? heatLayer.addTo(map) : map.removeLayer(heatLayer);
+  document.getElementById('lheat') && document.getElementById('lheat').classList.toggle('on', heatOn);
+}
+
+// ════════════════════════════════════════
+// ZONE MARKERS
+// ════════════════════════════════════════
+function buildZones() {
+  const h    = SH[_lastAutoSlot] || new Date().getHours();
+  const slot = getTimeSlot(h);
+  if (_zonesBuiltForSlot === slot && zoneMarkers.length > 0) {
+    zoneMarkers.forEach(m => zonesOn ? m.addTo(map) : map.removeLayer(m));
+    return;
+  }
+  zoneMarkers.forEach(m => map.removeLayer(m));
+  zoneMarkers = [];
+  _zonesBuiltForSlot = slot;
+  const cache = buildZoneCache(h);
+  crimeZones.forEach((z, i) => {
+    const sc  = Math.min(cache[i] ? cache[i].risk : z.baseRisk, 10);
+    if (sc < 3) return;
+    const inf = riskLabel(sc);
+    const c   = L.circleMarker([z.lat, z.lng], {
+      radius: 5 + sc * 0.45,
+      fillColor: inf.color, fillOpacity: 0.65,
+      color: inf.color, weight: 1
+    });
+    c.bindPopup(
+      '<div style="font-family:\'Nunito\',sans-serif;min-width:150px;padding:0.2rem">'
+      + '<b style="font-size:0.88rem;font-family:\'Playfair Display\',serif">' + z.name + '</b><br>'
+      + '<span style="color:' + inf.color + ';font-size:0.78rem;font-weight:600">' + inf.label + '</span><br>'
+      + '<span style="color:var(--muted);font-size:0.72rem">Risk: ' + sc.toFixed(1) + '/10'
+      + (z.types && z.types.length ? '<br>' + z.types.join(', ') : '') + '</span></div>'
+    );
+    if (zonesOn) c.addTo(map);
+    zoneMarkers.push(c);
+  });
+}
+
+function toggleZones() {
+  zonesOn = !zonesOn;
+  zoneMarkers.forEach(m => zonesOn ? m.addTo(map) : map.removeLayer(m));
+  document.getElementById('lzone') && document.getElementById('lzone').classList.toggle('on', zonesOn);
+}
+
+// ════════════════════════════════════════
+// ZONE RISK CACHE
+// ════════════════════════════════════════
+async function fetchRatingAdjustments() {
+  try {
+    const { data, error } = await window.supabase
+      .rpc('get_area_risk_adjustments');
+    if (error) throw error;
+    _ratingAdjustments = data || [];
+    _ratingsFetched = true;
+    console.log('Rating adjustments loaded:', _ratingAdjustments.length);
+  } catch(e) {
+    console.warn('Could not fetch rating adjustments:', e);
+    _ratingsFetched = true;
+  }
+  // Per-waypoint reviews (individual stops/localities along a journey — see
+  // waypoint_ratings / get_waypoint_risk_zones in supabase/migrations). Optional:
+  // requires that migration to be run, so a missing function fails silently.
+  try {
+    const { data, error } = await window.supabase.rpc('get_waypoint_risk_zones');
+    if (error) throw error;
+    _waypointZones = data || [];
+    console.log('Waypoint risk zones loaded:', _waypointZones.length);
+  } catch (e) {
+    _waypointZones = [];
+  }
+  _zoneCache = null;
+  if (crimeZones.length) { buildHeat(); buildZones(); }
+}
+
+function buildZoneCache(h) {
+  const slot = getTimeSlot(h);
+  if (_zoneCache && _zoneCacheSlot === slot) return _zoneCache;
+  const mult = TIME_MULTIPLIERS[slot];
+  _zoneCache = crimeZones.map(z => {
+    let base = z.baseRisk;
+    if ((slot === 'night' || slot === 'evening') && z.nightOverride)
+      base = z.nightOverride;
+    let adjustedRisk = base * mult;
+    if (_ratingsFetched && _ratingAdjustments.length) {
+  for (const adj of _ratingAdjustments) {
+    const dist = getDistance(z.lat, z.lng, adj.lat, adj.lng);
+    if (dist < 500 && adj.rating_count >= 5) {
+      adjustedRisk = Math.max(1, Math.min(10, adjustedRisk + adj.risk_adjustment));
+      break;
+    }
+  }
+}
+    return { lat:z.lat, lng:z.lng, r:z.radius||200, risk:adjustedRisk };
+  });
+  // Add any well-supported waypoint reviews for THIS time-of-day slot as their own
+  // small risk zones — a place reviewed unsafe only stays a risk during the hours
+  // people actually reported feeling unsafe, not around the clock.
+  if (_waypointZones.length) {
+    for (const z of _waypointZones) {
+      if (z.time_slot !== slot) continue;
+      _zoneCache.push({ lat: z.lat, lng: z.lng, r: z.radius || 180, risk: z.risk });
+    }
+  }
+  _zoneCacheSlot = slot;
+  return _zoneCache;
+}
+
+function scorePoint(lat, lng, cache) {
+  let max = 1.0;
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  for (let i = 0; i < cache.length; i++) {
+    const z = cache[i];
+    const latThresh = z.r / 90000;
+    const lngThresh = z.r / (90000 * cosLat + 0.0001);
+    if (Math.abs(z.lat - lat) > latThresh || Math.abs(z.lng - lng) > lngThresh) continue;
+    const dLat = (z.lat - lat) * Math.PI / 180;
+    const dLng = (z.lng - lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + cosLat * Math.cos(z.lat*Math.PI/180) * Math.sin(dLng/2)**2;
+    const dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    if (dist <= z.r) {
+      const risk = z.risk * (1 - (dist / z.r) * 0.4);
+      if (risk > max) max = risk;
+    }
+  }
+  return Math.min(max, 10);
+}
+
+function smartScore(coords, h) {
+  if (!coords || !coords.length) return 5;
+  const cache = buildZoneCache(h);
+  const step  = Math.max(1, Math.floor(coords.length / MAX_SAMPLE));
+  const sampled = [];
+  for (let i = 0; i < coords.length; i += step) sampled.push(coords[i]);
+  if (sampled[sampled.length-1] !== coords[coords.length-1])
+    sampled.push(coords[coords.length-1]);
+  const scores   = sampled.map(c => scorePoint(c[1], c[0], cache));
+  const avg      = scores.reduce((a,b) => a+b, 0) / scores.length;
+  const sorted   = [...scores].sort((a,b) => a-b);
+  const max      = sorted[sorted.length-1];
+  const p90      = sorted[Math.floor(sorted.length*0.9)] || max;
+  const dangerPct= scores.filter(s => s >= 6).length / scores.length;
+  return Math.min((avg*0.35)+(max*0.35)+(p90*0.2)+(dangerPct*3), 10);
+}
+
+// ════════════════════════════════════════
+// TRAVEL MODE
+// ════════════════════════════════════════
+let _modeDebounce = null;
+function setMode(el) {
+  travelMode = el.dataset.mode;
+  document.querySelectorAll('#mode-sw .sbt').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (fromCoords && toCoords) {
+    clearTimeout(_modeDebounce);
+    _modeDebounce = setTimeout(() => refetchRoutes(), 400);
+  }
+}
+
+async function refetchRoutes() {
+  const wasTracking = trackingOn;
+  const wasNav      = _navMode;
+  const prevSelIdx  = selIdx;
+  trackingOn = false;
+  _navMode   = false;
+  try {
+    await findRoutes();
+    selIdx = Math.min(prevSelIdx, curRoutes.length - 1);
+    trackingOn = wasTracking;
+    _navMode   = wasNav;
+    if (wasNav) {
+      routeLayers.forEach((l, i) => {
+        if (!l) return;
+        if (i !== selIdx) {
+          if (map.hasLayer(l)) map.removeLayer(l);
+        } else {
+          if (!map.hasLayer(l)) map.addLayer(l);
+          l.setStyle({ opacity: 0.9, weight: 6 });
+          l.bringToFront();
+          if (fromCoords) {
+            const ll = l.getLatLngs();
+            if (ll && ll.length > 1)
+              l.setLatLngs([L.latLng(fromCoords[0], fromCoords[1]), ...ll.slice(1)]);
+          }
+        }
+      });
+      populateNdRoutes();
+      updateNavStats(true);
+      showToast('✅ Route updated');
+    }
+  } catch(e) {
+    trackingOn = wasTracking;
+    _navMode   = wasNav;
+    showToast('Could not recalculate route');
+  }
+}
+
+// ════════════════════════════════════════
+// FIND ROUTES
+// ════════════════════════════════════════
+async function findRoutes() {
+  if (!fromCoords) { showToast('Select a starting point first'); return; }
+  if (!toCoords)   { showToast('Select a destination first'); return; }
+  if (window.ORS_API_KEY === 'YOUR_ORS_API_KEY') { showToast('Add your ORS API key first'); return; }
+
+  const btn = document.getElementById('bfind');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Analysing routes…';
+
+  document.getElementById('mode-section').style.display = 'block';
+  document.getElementById('mode-div-top').style.display = 'block';
+  document.getElementById('mode-div-bottom').style.display = 'block';
+
+  routeLayers.forEach(l => map.removeLayer(l));
+  routeLayers = [];
+  curRoutes   = [];
+  if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+  if (toMarker)   { map.removeLayer(toMarker);   toMarker   = null; }
+  document.getElementById('rsec').style.display = 'none';
+
+  try {
+    const [fromLng, fromLat] = [fromCoords[1], fromCoords[0]];
+    const [toLng,   toLat  ] = [toCoords[1],   toCoords[0]  ];
+
+    const straightLineDist = getDistance(fromLat, fromLng, toLat, toLng);
+
+    const W = straightLineDist < 3000  ? 0.003
+            : straightLineDist < 10000 ? 0.006
+            : 0.012;
+
+    function buildAvoidPolygon(lat1,lng1,lat2,lng2,w) {
+      const dLat=lat2-lat1, dLng=lng2-lng1;
+      const len=Math.sqrt(dLat*dLat+dLng*dLng)||1;
+      const pLat=-dLng/len*w, pLng=dLat/len*w;
+      return { type:'Polygon', coordinates:[[
+        [lng1+pLng,lat1+pLat],[lng1-pLng,lat1-pLat],
+        [lng2-pLng,lat2-pLat],[lng2+pLng,lat2+pLat],
+        [lng1+pLng,lat1+pLat]
+      ]]};
+    }
+
+    const t1lat = fromLat + (toLat - fromLat) * 0.33;
+    const t1lng = fromLng + (toLng - fromLng) * 0.33;
+    const t2lat = fromLat + (toLat - fromLat) * 0.67;
+    const t2lng = fromLng + (toLng - fromLng) * 0.67;
+    const midLat = (fromLat + toLat) / 2;
+    const midLng = (fromLng + toLng) / 2;
+
+    async function fetchORS(body) {
+      try {
+        const r = await fetch(
+          'https://api.openrouteservice.org/v2/directions/' + travelMode + '/geojson',
+          {
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':window.ORS_API_KEY},
+            body: JSON.stringify({ coordinates:[[fromLng,fromLat],[toLng,toLat]], instructions:false, ...body })
+          }
+        );
+        if (!r.ok) return [];
+        const d = await r.json();
+        return d.features || [];
+      } catch { return []; }
+    }
+
+    const fetches = [
+      fetchORS({}),
+      fetchORS({ options:{ avoid_polygons: buildAvoidPolygon(t1lat,t1lng,t2lat,t2lng,W) }}),
+      fetchORS({ options:{ avoid_polygons: buildAvoidPolygon(fromLat,fromLng,midLat,midLng,W) }}),
+    ];
+    if (straightLineDist > 5000) {
+      fetches.push(fetchORS({ options:{ avoid_polygons: buildAvoidPolygon(t1lat,t1lng,midLat,midLng,W*1.5) }}));
+      fetches.push(fetchORS({ options:{ avoid_polygons: buildAvoidPolygon(midLat,midLng,t2lat,t2lng,W*1.5) }}));
+    }
+
+    const fetchResults = await Promise.all(fetches);
+    const all = fetchResults.flat();
+    if (!all.length) throw new Error('No routes found between these locations');
+
+    const h = SH[_lastAutoSlot] || new Date().getHours();
+    const yield_ = () => new Promise(r => setTimeout(r, 0));
+
+    const scored = [];
+    for (const feat of all) {
+      const coords   = feat.geometry.coordinates;
+      const props    = feat.properties.summary;
+      const durMin   = Math.round(props.duration / 60);
+      const durText  = durMin >= 60
+        ? (Math.floor(durMin/60)+'h '+(durMin%60>0?durMin%60+'m':''))
+        : (durMin+' min');
+      const distM    = props.distance;
+      const distText = distM < 1000 ? (Math.round(distM)+'m') : ((distM/1000).toFixed(1)+' km');
+      await yield_();
+      const riskScore = smartScore(coords, h);
+      scored.push({ coords, riskScore, dist:distText, dur:durText, distM, durSecs:props.duration });
+    }
+
+    scored.sort((a,b) => a.riskScore - b.riskScore);
+
+    const distSimilarPct  = straightLineDist > 10000 ? 0.12
+                          : straightLineDist > 5000  ? 0.09
+                          : 0.06;
+    const waypointRadius  = straightLineDist > 10000 ? 200
+                          : straightLineDist > 5000  ? 130
+                          : 80;
+    const overlapThresh   = straightLineDist > 8000  ? 0.75 : 0.60;
+
+    function areSimilar(r1, r2) {
+      const distDiff = Math.abs(r1.distM - r2.distM) / Math.max(r1.distM, r2.distM);
+      if (distDiff > distSimilarPct) return false;
+      const sampleCount = straightLineDist > 8000 ? 20 : 10;
+      const sample = c => {
+        const s = Math.max(1, Math.floor(c.length / sampleCount)), p = [];
+        for (let i = 0; i < c.length; i += s) p.push(c[i]);
+        return p;
+      };
+      const pts1 = sample(r1.coords), pts2 = sample(r2.coords);
+      let matches = 0;
+      for (const p1 of pts1) {
+        if (pts2.some(p2 => {
+          const dy = (p1[1]-p2[1]) * 111000;
+          const dx = (p1[0]-p2[0]) * 111000 * Math.cos(p1[1] * Math.PI / 180);
+          return Math.sqrt(dx*dx + dy*dy) < waypointRadius;
+        })) matches++;
+      }
+      return matches / pts1.length > overlapThresh;
+    }
+
+    const unique = [];
+    for (const r of scored) {
+      if (!unique.some(u => areSimilar(u, r))) unique.push(r);
+      if (unique.length >= 3) break;
+    }
+
+    const minRisk = Math.min(...unique.map(r => r.riskScore));
+    const minDur  = Math.min(...unique.map(r => r.durSecs || Infinity));
+    const safest  = unique.find(r => r.riskScore === minRisk);
+    const fastest = unique.find(r => r.durSecs   === minDur);
+
+    let visible = [safest];
+    if (safest === fastest) {
+      const alt = unique.find(r => r !== safest);
+      if (alt) visible.push(alt);
+    } else {
+      if (fastest) visible.push(fastest);
+      const alt = unique.find(r => r !== safest && r !== fastest);
+      if (alt) visible.push(alt);
+    }
+
+    curRoutes = visible;
+
+    const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+    const WGT = [6, 4, 3];
+    const OPC = [0.9, 0.5, 0.25];
+
+    [...visible].reverse().forEach((sr, ri) => {
+      const rank = visible.length - 1 - ri;
+      const interior = sr.coords.slice(1, -1).map(c => [c[1], c[0]]);
+      const ll = [fromCoords, ...interior, toCoords];
+      const layer = L.polyline(ll, {
+        color:   CLR[rank] || '#6b7280',
+        weight:  WGT[rank] || 3,
+        opacity: OPC[rank] || 0.2,
+        lineCap: 'round', lineJoin: 'round'
+      }).addTo(map);
+      routeLayers[rank] = layer;
+    });
+
+    map.fitBounds(
+      L.latLngBounds([fromCoords, toCoords,
+        ...visible[0].coords.map(c => [c[1], c[0]])]),
+      { paddingTopLeft:[50,50], paddingBottomRight:[50,50] }
+    );
+
+    const mkIcon = clr => L.divIcon({
+      className:'',
+      html:'<div style="background:'+clr+';border:3px solid #fff;border-radius:50% 50% 50% 0;width:17px;height:17px;transform:rotate(-45deg);box-shadow:0 2px 8px '+clr+'99"></div>',
+      iconSize:[17,17], iconAnchor:[8,17], popupAnchor:[0,-20]
+    });
+    fromMarker = L.marker(fromCoords, { icon:mkIcon('#2dd4bf'), zIndexOffset:1000 })
+      .addTo(map).bindPopup("<b style=\"font-family:'Playfair Display',serif\">🚩 Start</b>");
+    toMarker   = L.marker(toCoords,   { icon:mkIcon('#c084fc'), zIndexOffset:1000 })
+      .addTo(map).bindPopup("<b style=\"font-family:'Playfair Display',serif\">🏁 Destination</b>");
+
+    renderCards(visible);
+    document.getElementById('rsec').style.display = 'block';
+    selIdx = 0;
+
+    btn.style.display = 'none';
+    btn.disabled = false;
+    btn.innerHTML =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><path d="M6 17V7a2 2 0 0 1 2-2h8"/><circle cx="18" cy="5" r="2"/></svg> Find Safest Route';
+
+    setTimeout(() => {
+      const rsec = document.getElementById('rsec');
+      if (rsec) rsec.scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 120);
+
+  } catch(e) {
+    showToast('Error: ' + e.message);
+    console.error(e);
+    const btn = document.getElementById('bfind');
+    btn.disabled = false;
+  }
+}
+
+// ════════════════════════════════════════
+// ROUTE CARDS
+// ════════════════════════════════════════
+function renderCards(routes) {
+  const c = document.getElementById('rcards');
+  c.innerHTML = '';
+  if (!routes.length) return;
+
+  const minRisk = Math.min(...routes.map(r => r.riskScore));
+  const minDur  = Math.min(...routes.map(r => r.durSecs || Infinity));
+  const safest  = routes.find(r => r.riskScore === minRisk);
+  const fastest = routes.find(r => r.durSecs   === minDur);
+
+  routes.forEach((sr, rank) => {
+    const inf       = riskLabel(sr.riskScore);
+    const isSafest  = sr === safest;
+    const isFastest = sr === fastest;
+
+    let label, badge;
+    if (isSafest && isFastest) {
+      label='🛡️⚡ Safest & Fastest'; badge='bs';
+    } else if (isSafest) {
+      label='🛡️ Safest Route';       badge='bs';
+    } else if (isFastest) {
+      label='⚡ Fastest Route';       badge='bf';
+    } else {
+      label='🔀 Alternate Route';     badge='ba';
+    }
+
+    const safetyPct = Math.round((1 - sr.riskScore/10) * 100);
+    const barColor  = sr.riskScore < 4 ? '#2dd4bf'
+                    : sr.riskScore < 6 ? '#f59e0b'
+                    : sr.riskScore < 8 ? '#f97316' : '#ef4444';
+
+    const d = document.createElement('div');
+    d.className = 'rc' + (rank === 0 ? ' sel' : '');
+    d.onclick = () => selectRoute(rank);
+    d.innerHTML =
+      '<span class="rb '+badge+'">'+label+'</span>'
+      +'<div class="rm">'
+      +'<div class="rs">📏 <strong>'+sr.dist+'</strong></div>'
+      +'<div class="rs">⏱ <strong>'+sr.dur+'</strong></div>'
+      +'</div>'
+      +'<div style="margin-top:0.4rem">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.18rem">'
+      +'<span style="font-size:0.63rem;color:var(--muted);font-weight:600">Safety Score</span>'
+      +'<span style="font-size:0.7rem;font-weight:700;color:'+barColor+'">'+sr.riskScore.toFixed(1)+'/10</span>'
+      +'</div>'
+      +'<div style="height:3.5px;background:var(--border);border-radius:4px;overflow:hidden">'
+      +'<div style="height:100%;width:'+safetyPct+'%;background:'+barColor+';border-radius:4px;transition:width 0.4s"></div>'
+      +'</div>'
+      +'</div>'
+      +'<div class="rp" style="background:'+inf.bg+';color:'+inf.color+';margin-top:0.38rem">'
+      +'<div class="rd" style="background:'+inf.dot+'"></div>'
+      +inf.label+'</div>';
+    c.appendChild(d);
+  });
+}
+
+function selectRoute(rank) {
+  document.querySelectorAll('.rc').forEach((c,i) => c.classList.toggle('sel', i===rank));
+  selIdx = rank;
+  const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+  routeLayers.forEach((l,i) => {
+    if (!l) return;
+    l.setStyle({ opacity:i===rank?0.95:0.15, weight:i===rank?7:3, color:CLR[i]||'#6b7280' });
+    if (i===rank) l.bringToFront();
+  });
+  if (routeLayers[rank]) {
+    const hudH = (document.getElementById('nav-hud') || {}).offsetHeight || 0;
+    const br   = hudH > 0 ? hudH + 20 : 52;
+    map.flyToBounds(routeLayers[rank].getBounds(), {
+      paddingTopLeft:[52,52], paddingBottomRight:[52, br],
+      animate:true, duration:0.9, maxZoom:16
+    });
+  }
+}
+
+// ════════════════════════════════════════
+// AUTOCOMPLETE
+// ════════════════════════════════════════
+let acT = null;
+
+async function acSearch(q, field, forceCategory=null, nearbyMode=false) {
+  clearTimeout(acT);
+  const dd = document.getElementById('ac-'+field);
+  const minLen = (forceCategory || nearbyMode) ? 0 : 2;
+  if (q.length < minLen && !forceCategory && !nearbyMode) { dd.style.display='none'; return; }
+
+  acT = setTimeout(async () => {
+    try {
+      let userLat = fromCoords ? fromCoords[0] : 19.076;
+      let userLng = fromCoords ? fromCoords[1] : 72.877;
+
+      const CAT_ICONS = {
+        station:'🚉', hospital:'🏥', school:'🏫', college:'🎓',
+        park:'🌳', bank:'🏦', beach:'🏖️', 'post office':'📮',
+        temple:'🛕', mall:'🛒', hotel:'🏨', police:'👮',
+        pharmacy:'💊', atm:'🏧', restaurant:'🍽️'
+      };
+      function iconFor(type, cat) {
+        if (cat && CAT_ICONS[cat]) return CAT_ICONS[cat];
+        const t = (type||'').toLowerCase();
+        return t.includes('station')||t.includes('halt') ? '🚉'
+          : t.includes('hospital')||t.includes('clinic') ? '🏥'
+          : t.includes('school') ? '🏫'
+          : t.includes('college')||t.includes('university') ? '🎓'
+          : t.includes('restaurant')||t.includes('cafe') ? '🍽️'
+          : t.includes('park')||t.includes('garden') ? '🌳'
+          : t.includes('beach') ? '🏖️'
+          : t.includes('bank') ? '🏦'
+          : t.includes('atm') ? '🏧'
+          : t.includes('post_office')||t.includes('post office') ? '📮'
+          : t.includes('hotel')||t.includes('guest_house') ? '🏨'
+          : t.includes('police') ? '👮'
+          : t.includes('pharmacy') ? '💊' : '📍';
+      }
+
+      function distStr(lat, lon) {
+        const dLat=(lat-userLat)*Math.PI/180, dLng=(lon-userLng)*Math.PI/180;
+        const a=Math.sin(dLat/2)**2+Math.cos(userLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
+        const d=Math.round(6371000*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+        return d<1000 ? d+' m away' : (d/1000).toFixed(1)+' km away';
+      }
+
+      function showResults(items) {
+        if (!items.length) {
+          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No results found. Try a different name.</div>';
+          dd.style.display='block'; return;
+        }
+        dd.innerHTML='';
+        items.slice(0,8).forEach(({name, fullAddr, label, lat, lon, type, cat}) => {
+          const div=document.createElement('div');
+          div.className='aci';
+          div.dataset.lat=lat; div.dataset.lon=lon;
+          div.dataset.label=label; div.dataset.field=field;
+          div.innerHTML='<strong>'+iconFor(type,cat)+' '+name+'</strong>'
+            +'<div class="aci-addr">'+fullAddr+'</div>'
+            +'<span class="aci-dist">📍 '+distStr(parseFloat(lat),parseFloat(lon))+'</span>';
+          div.dataset.emoji = iconFor(type, cat);
+          div.addEventListener('click', function() {
+            document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+            document.getElementById('cat-panel').classList.remove('open');
+            document.getElementById('cat-toggle').classList.remove('open');
+            pickPlace(this.dataset.field,this.dataset.lat,this.dataset.lon,this.dataset.label,this.dataset.emoji);
+          });
+          dd.appendChild(div);
+        });
+        dd.style.display='block';
+      }
+
+      if (nearbyMode && forceCategory) {
+        const tagMap = {
+          // "station" includes metro/subway stations alongside railway stations/halts —
+          // two tag filters unioned together — so the search surfaces both, not just
+          // suburban rail.
+          'station':     ['["railway"~"station|halt"]', '["station"="subway"]', '["railway"="subway_entrance"]'],
+          'hospital':    ['["amenity"="hospital"]'],
+          'school':      ['["amenity"="school"]'],
+          'college':     ['["amenity"~"college|university"]'],
+          'park':        ['["leisure"~"park|garden"]'],
+          'bank':        ['["amenity"="bank"]'],
+          'beach':       ['["natural"="beach"]'],
+          'post office': ['["amenity"="post_office"]'],
+          'temple':      ['["amenity"="place_of_worship"]'],
+          'mall':        ['["shop"~"mall|supermarket"]'],
+          'hotel':       ['["tourism"~"hotel|guest_house"]'],
+          'police':      ['["amenity"="police"]'],
+          'pharmacy':    ['["amenity"="pharmacy"]'],
+          'atm':         ['["amenity"="atm"]'],
+          'restaurant':  ['["amenity"~"restaurant|cafe|fast_food"]'],
+        };
+        const tags = tagMap[forceCategory];
+        if (!tags) { dd.style.display='none'; return; }
+
+        // "Nearby" must mean near the USER. If no start point is set yet, ask the
+        // browser for the current position (cached after the first fix) before
+        // falling back to central Mumbai.
+        if (!fromCoords) {
+          if (!window._lastGeo && navigator.geolocation) {
+            window._lastGeo = await new Promise(res => navigator.geolocation.getCurrentPosition(
+              p => res([p.coords.latitude, p.coords.longitude]), () => res(null),
+              { enableHighAccuracy: false, timeout: 4000, maximumAge: 60000 }));
+          }
+          if (window._lastGeo) { userLat = window._lastGeo[0]; userLng = window._lastGeo[1]; }
+        }
+
+        const dist = (la, lo) => getDistance(userLat, userLng, la, lo);
+        const mirrors = [
+          'https://overpass-api.de/api/interpreter',
+          'https://overpass.kumi.systems/api/interpreter',
+          'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+        ];
+        const queryOverpass = async (radius) => {
+          const clauses = tags.map(tag =>
+            `node${tag}(around:${radius},${userLat},${userLng});way${tag}(around:${radius},${userLat},${userLng});relation${tag}(around:${radius},${userLat},${userLng});`
+          ).join('');
+          const query = `[out:json][timeout:20];(${clauses});out center tags 400;`;
+          const attempt = async (mirror) => {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 12000);
+            try {
+              const r = await fetch(mirror, { method:'POST', body:'data='+encodeURIComponent(query), signal:ctrl.signal });
+              if (!r.ok) throw new Error('bad status');
+              const d = await r.json();
+              return d.elements || [];
+            } finally { clearTimeout(t); }
+          };
+          // first mirror to answer wins; an empty answer is a valid "nothing within this radius"
+          return Promise.any(mirrors.map(attempt));
+        };
+
+        // Overpass returns matches in arbitrary (id) order and caps the count, so a big
+        // radius can miss the genuinely nearest place. Search outward in rings instead:
+        // the first ring that has results contains the nearest ones.
+        window._nearbyCache = window._nearbyCache || new Map();
+        const cacheKey = forceCategory + '|' + userLat.toFixed(3) + ',' + userLng.toFixed(3);
+        const cached = window._nearbyCache.get(cacheKey);
+        let elements = [];
+        if (cached && Date.now() - cached.t < 120000) {
+          elements = cached.elements;
+        } else {
+          let overpassOk = false;
+          for (const radius of [1000, 2500, 6000, 15000]) {
+            try {
+              elements = await queryOverpass(radius);
+              overpassOk = true;
+              if (elements.length) break;
+            } catch (e) { break; }          // every mirror failed — use the fallback below
+          }
+          if (elements.length) window._nearbyCache.set(cacheKey, { elements, t: Date.now() });
+
+          // Fallback when Overpass is unreachable: location-biased geocoder search.
+          if (!elements.length && !overpassOk) {
+            const q = forceCategory === 'station' ? 'railway station' : forceCategory;
+            try {
+              const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=30&lat=${userLat}&lon=${userLng}&lang=en`);
+              const d = await r.json();
+              elements = (d.features || []).filter(f => f.geometry && f.geometry.coordinates).map(f => ({
+                lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+                tags: { name: f.properties.name, 'addr:street': f.properties.street, 'addr:suburb': f.properties.district || f.properties.suburb || f.properties.city }
+              }));
+            } catch (e) {}
+          }
+          if (!elements.length && !overpassOk) {
+            try {
+              const dl = 0.06;
+              const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(forceCategory)}&format=json&limit=30&addressdetails=1&bounded=1&viewbox=${userLng-dl},${userLat+dl},${userLng+dl},${userLat-dl}`, { headers:{'Accept-Language':'en'} });
+              const d = await r.json();
+              elements = (Array.isArray(d) ? d : []).map(x => ({
+                lat: parseFloat(x.lat), lon: parseFloat(x.lon),
+                tags: { name: x.name || (x.display_name||'').split(',')[0], 'addr:suburb': (x.address||{}).suburb || (x.address||{}).city }
+              }));
+            } catch (e) {}
+          }
+        }
+
+        if (!elements.length) {
+          dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">Could not load nearby '+forceCategory+' right now. Check your connection and tap the category again.</div>';
+          dd.style.display='block'; return;
+        }
+
+        const items = elements
+          .map(el => {
+            const lat = String(el.lat || el.center?.lat || 0);
+            const lon = String(el.lon || el.center?.lon || 0);
+            if (!parseFloat(lat) || !parseFloat(lon)) return null;
+            const name = el.tags?.name || el.tags?.['name:en'] || el.tags?.brand || el.tags?.operator || (forceCategory.charAt(0).toUpperCase() + forceCategory.slice(1));
+            const road = el.tags?.['addr:street'] || el.tags?.['addr:full'] || '';
+            const suburb = el.tags?.['addr:suburb'] || el.tags?.['addr:city'] || 'Mumbai';
+            const fullAddr = [road, suburb].filter(Boolean).join(', ') || 'Mumbai';
+            const label = name + ', ' + suburb;
+            return { name, fullAddr, label, lat, lon, type: forceCategory, cat: forceCategory };
+          })
+          .filter(Boolean);
+
+        items.sort((a,b) => {
+          const da = getDistance(userLat,userLng,parseFloat(a.lat),parseFloat(a.lon));
+          const db = getDistance(userLat,userLng,parseFloat(b.lat),parseFloat(b.lon));
+          return da - db;
+        });
+
+        // the same place is often mapped as both a node and a building outline — drop near-duplicates
+        const seen = new Set();
+        const unique = items.filter(it => {
+          const k = it.name.toLowerCase() + '|' + parseFloat(it.lat).toFixed(3) + ',' + parseFloat(it.lon).toFixed(3);
+          if (seen.has(k)) return false; seen.add(k); return true;
+        });
+
+        showResults(unique);
+        return;
+      }
+
+      const searchQ = q || '';
+      if (searchQ.length < 2) { dd.style.display='none'; return; }
+
+      let items = [];
+
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQ+' Mumbai')}&limit=10&lat=${userLat}&lon=${userLng}&lang=en`;
+        const r = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (r.ok) {
+          const d = await r.json();
+          const features = d.features || [];
+          const seenKeys = new Set();
+          for (const f of features) {
+            const p = f.properties || {};
+            if (p.country !== 'India') continue;
+            const coords = f.geometry?.coordinates;
+            if (!coords) continue;
+            const lon = String(coords[0]), lat = String(coords[1]);
+            const name = p.name || p.street || searchQ;
+            const area = p.district || p.suburb || p.city || 'Mumbai';
+            const city = p.city || 'Mumbai';
+            const street = p.street || '';
+            const fullAddr = [street, area, city].filter((x,i,a)=>x&&a.indexOf(x)===i).join(', ');
+            const label = name + ', ' + area + ', ' + city;
+            const key = (name+'|'+area).toLowerCase().trim();
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+            items.push({ name, fullAddr, label, lat, lon, type: p.osm_value || p.type || '' });
+            if (items.length >= 8) break;
+          }
+        }
+      } catch(e) { console.warn('Photon failed:', e); }
+
+      if (!items.length) {
+        const nominatimUrls = [
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ+' Mumbai')}&format=json&limit=10&countrycodes=in&addressdetails=1&dedupe=1`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ)}&format=json&limit=10&countrycodes=in&viewbox=72.70,18.85,73.10,19.45&addressdetails=1`,
+        ];
+        for (const url of nominatimUrls) {
+          try {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 8000);
+            const r = await fetch(url, { headers:{'Accept-Language':'en'}, signal:ctrl.signal });
+            clearTimeout(t);
+            if (!r.ok) continue;
+            const data = await r.json();
+            if (!Array.isArray(data) || !data.length) continue;
+            const seenKeys = new Set();
+            for (const item of data) {
+              if (!item.lat || !item.lon) continue;
+              const a = item.address || {};
+              const name = item.name || item.display_name.split(',')[0];
+              const area = a.suburb||a.neighbourhood||a.city_district||'';
+              const city = a.city||a.town||'Mumbai';
+              const road = a.road||a.pedestrian||a.footway||'';
+              const fullAddr = [road,area,city].filter(Boolean).join(', ');
+              const label = name+(area?', '+area+', '+city:', '+city);
+              const key = (name+'|'+area).toLowerCase().trim();
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              items.push({ name, fullAddr, label, lat:item.lat, lon:item.lon, type:item.type||'' });
+              if (items.length >= 8) break;
+            }
+            if (items.length) break;
+          } catch { continue; }
+        }
+      }
+
+      if (!items.length) {
+        dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">No results found. Try a different name.</div>';
+        dd.style.display='block'; return;
+      }
+
+      showResults(items);
+
+    } catch(e) {
+      console.warn('acSearch error:', e);
+      document.getElementById('ac-'+field).style.display='none';
+    }
+  }, 300);
+}
+
+
+function toggleCatFilters() {
+  const toggle=document.getElementById('cat-toggle');
+  const panel=document.getElementById('cat-panel');
+  const isOpen=panel.classList.toggle('open');
+  toggle.classList.toggle('open', isOpen);
+}
+
+function catSearch(category, field, btn) {
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const input=document.getElementById('inp-'+field);
+  input.value=''; input.placeholder='Nearby '+category+'…';
+  const dd=document.getElementById('ac-'+field);
+  dd.innerHTML='<div class="aci" style="color:var(--muted);font-size:0.76rem;text-align:center;padding:0.75rem">Finding nearby '+category+'…</div>';
+  dd.style.display='block';
+  acSearch('',field,category,true);
+}
+
+let _destEmoji = '📍';
+
+function pickPlace(field, lat, lon, label, emoji) {
+  document.getElementById('inp-'+field).value = label;
+  document.getElementById('ac-'+field).style.display = 'none';
+  const coords = [parseFloat(lat), parseFloat(lon)];
+
+  const mkIcon = clr => L.divIcon({
+    className: '',
+    html: '<div style="background:'+clr+';border:3px solid #fff;border-radius:50% 50% 50% 0;'
+        + 'width:17px;height:17px;transform:rotate(-45deg);box-shadow:0 2px 8px '+clr+'99"></div>',
+    iconSize: [17,17], iconAnchor: [8,17], popupAnchor: [0,-20]
+  });
+
+  if (field === 'from') {
+    fromCoords = coords;
+    if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+    fromMarker = L.marker(coords, { icon: mkIcon('#2dd4bf'), zIndexOffset: 1000 })
+      .addTo(map)
+      .bindPopup("<b style=\"font-family:'Playfair Display',serif\">🚩 Start</b>")
+      .openPopup();
+  } else {
+    toCoords = coords;
+    _destEmoji = emoji || '📍';
+    if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
+    toMarker = L.marker(coords, { icon: mkIcon('#c084fc'), zIndexOffset: 1000 })
+      .addTo(map)
+      .bindPopup("<b style=\"font-family:'Playfair Display',serif\">🏁 " + label.split(',')[0] + '</b>')
+      .openPopup();
+    updateToClear();
+    const bfind = document.getElementById('bfind');
+    bfind.style.display = 'flex';
+    setTimeout(() => bfind.scrollIntoView({ behavior:'smooth', block:'nearest' }), 100);
+  }
+
+  map.setView(coords, 16);
+}
+
+function updateToClear() {
+  const inp = document.getElementById('inp-to');
+  const btn = document.getElementById('to-clear');
+  if (!btn) return;
+  btn.classList.toggle('visible', !!(inp && inp.value.trim()));
+}
+
+function clearDestination() {
+  const inp = document.getElementById('inp-to');
+  if (inp) { inp.value = ''; inp.placeholder = 'Type any place — Churchgate, IIT, Juhu Beach…'; }
+  const btn = document.getElementById('to-clear');
+  if (btn) btn.classList.remove('visible');
+  if (toMarker) { map.removeLayer(toMarker); toMarker = null; }
+  toCoords = null;
+  _destEmoji = '📍';
+  document.getElementById('rsec').style.display = 'none';
+  document.getElementById('bfind').style.display = 'none';
+  routeLayers.forEach(l => { if (l) map.removeLayer(l); });
+  routeLayers = [];
+  curRoutes = [];
+  document.getElementById('ac-to').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.iw-w'))
+    document.querySelectorAll('.acd').forEach(d=>d.style.display='none');
+});
+
+// ════════════════════════════════════════
+// CURRENT LOCATION
+// ════════════════════════════════════════
+const LOC_ICON_HTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></svg>';
+
+function centreOnUser() {
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  const btn = document.querySelector('.locate-btn');
+  if (btn) btn.classList.add('locating');
+
+  function applyPos(lat, lng, acc) {
+    const zoom = _navMode ? NAV_ZOOM : DEFAULT_ZOOM;
+    map.flyTo([lat, lng], zoom, { animate: true, duration: 0.5 });
+    placeLocationMarker(lat, lng, acc);
+    fromCoords = [lat, lng];
+    if (btn) btn.classList.remove('locating');
+    if (_navMode) _navFollowMode = true;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => { if (btn) btn.classList.remove('locating'); showToast('Could not get location'); },
+    { enableHighAccuracy: false, timeout: 2000, maximumAge: 10000 }
+  );
+
+  navigator.geolocation.getCurrentPosition(
+    pos => applyPos(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
+}
+
+function placeLocationMarker(lat, lng, accuracy, heading) {
+  if (locMarker) { map.removeLayer(locMarker); locMarker=null; }
+  if (locAccCircle) { map.removeLayer(locAccCircle); locAccCircle=null; }
+  locAccCircle=L.circle([lat,lng],{
+    radius:Math.min(accuracy,200),
+    color:'#2dd4bf',weight:1,fillColor:'#2dd4bf',fillOpacity:0.06
+  }).addTo(map);
+
+  let iconHtml, iconSize, iconAnchor;
+  if (_navMode && heading !== null && heading !== undefined) {
+    iconHtml = '<div class="nav-arrow-wrap">'
+      + '<div class="nav-arrow-ring"></div>'
+      + '<div class="nav-arrow" style="transform:rotate('+heading+'deg)"></div>'
+      + '</div>';
+    iconSize   = [36, 36];
+    iconAnchor = [18, 18];
+  } else {
+    iconHtml   = '<div class="loc-wrap"><div class="loc-ring"></div><div class="loc-ring loc-ring2"></div><div class="loc-dot"></div></div>';
+    iconSize   = [20, 20];
+    iconAnchor = [10, 10];
+  }
+
+  const icon = L.divIcon({ className:'', html:iconHtml, iconSize, iconAnchor, popupAnchor:[0,-12] });
+  locMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
+    .bindPopup('<div style="font-family:Nunito,sans-serif;text-align:center;padding:0.2rem 0.4rem">'
+      +'<div style="font-weight:700;font-size:0.86rem">Current Location</div>'
+      +'<div style="font-size:0.7rem;color:var(--muted)">&#177;'+Math.round(accuracy)+'m</div></div>');
+}
+
+function useMyLocation() {
+  if (!navigator.geolocation) { showToast('Geolocation not supported'); return; }
+  const lbtn = document.getElementById('lbtn');
+  lbtn.innerHTML = '<span class="spin"></span> Locating…';
+  lbtn.disabled = true;
+
+  let watchId = null;
+  let bestAccuracy = Infinity;
+  let refinementTimer = null;
+
+  const giveUpTimer = setTimeout(() => {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    lbtn.innerHTML = LOC_ICON_HTML + ' Use my current location';
+    lbtn.disabled = false;
+    showToast('Notice: Location timed out. Try again outdoors.');
+  }, 12000);
+
+  watchId = navigator.geolocation.watchPosition(
+    async pos => {
+      const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+      if (acc >= bestAccuracy) return;
+      bestAccuracy = acc;
+      fromCoords = [lat, lng];
+      placeLocationMarker(lat, lng, acc);
+      map.setView([lat, lng], 16);
+      if (acc <= 500) {
+        reverseGeocode(lat, lng).then(addr => {
+          document.getElementById('inp-from').value = addr;
+        });
+        lbtn.innerHTML = LOC_ICON_HTML + ' Location set (±' + Math.round(acc) + 'm)';
+        lbtn.disabled = false;
+        showToast('Location captured. Refining…');
+      }
+      if (acc <= 30) {
+        clearTimeout(giveUpTimer);
+        clearTimeout(refinementTimer);
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        showToast('Location set (±' + Math.round(acc) + 'm).');
+        return;
+      }
+      if (!refinementTimer) {
+        refinementTimer = setTimeout(() => {
+          clearTimeout(giveUpTimer);
+          if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+          showToast('Location set (±' + Math.round(bestAccuracy) + 'm).');
+        }, 6000);
+      }
+    },
+    err => {
+      clearTimeout(giveUpTimer);
+      clearTimeout(refinementTimer);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      lbtn.innerHTML = LOC_ICON_HTML + ' Use my current location';
+      lbtn.disabled = false;
+      const msgs = { 1:'Location permission denied', 2:'Location unavailable', 3:'Location timed out' };
+      showToast('Notice: ' + (msgs[err.code] || 'Location error'));
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+}
+
+// ════════════════════════════════════════
+// REVERSE GEOCODE
+// ════════════════════════════════════════
+const BORDER_METRES = 150;
+
+const MUMBAI_SUBURBS = [
+  [19.210, 19.260, 'Borivali',    72.8561],
+  [19.185, 19.210, 'Kandivali',   72.8551],
+  [19.163, 19.185, 'Malad',       72.8475],
+  [19.145, 19.163, 'Goregaon',    72.8496],
+  [19.126, 19.145, 'Jogeshwari',  72.8497],
+  [19.100, 19.126, 'Andheri',     72.8360],
+  [19.083, 19.100, 'Vile Parle',  72.8355],
+  [19.065, 19.083, 'Santacruz',   72.8355],
+  [19.052, 19.065, 'Khar',        72.8355],
+  [19.038, 19.052, 'Bandra',      72.8410],
+  [19.018, 19.038, 'Dadar',       72.8431],
+  [19.060, 19.090, 'Kurla',       72.8826],
+  [19.100, 19.130, 'Vikhroli',    72.9250],
+  [19.130, 19.165, 'Bhandup',     72.9290],
+  [19.165, 19.200, 'Mulund',      72.9560],
+  [18.990, 19.018, 'Prabhadevi',  null],
+  [18.975, 18.990, 'Worli',       null],
+  [18.955, 18.975, 'Tardeo',      null],
+  [18.935, 18.955, 'Grant Road',  null],
+  [18.915, 18.935, 'Byculla',     null],
+  [18.895, 18.915, 'Parel',       null],
+];
+
+const MUMBAI_POINTS = [
+  [19.0400, 72.8530,  900,  'Dharavi'],
+  [19.0520, 72.9070, 1200,  'Tilaknagar'],
+  [19.0488, 72.9329, 1200,  'Mankhurd'],
+  [19.0628, 72.9249, 1200,  'Govandi'],
+  [18.9665, 72.8200,  600,  'Kamathipura'],
+  [18.9196, 72.8319, 1000,  'Sion'],
+  [18.9100, 72.8258, 1200,  'Wadala'],
+  [19.0330, 72.9150, 1800,  'Chembur'],
+  [19.2952, 72.8544, 2000,  'Vasai'],
+  [19.4207, 72.7986, 2000,  'Nalasopara East'],
+  [19.4195, 72.7820, 2000,  'Nalasopara West'],
+];
+
+const MUMBAI_PINCODES = {
+  'Borivali West':'400092',   'Borivali East':'400066',
+  'Kandivali West':'400067',  'Kandivali East':'400101',
+  'Malad West':'400064',      'Malad East':'400097',
+  'Goregaon West':'400062',   'Goregaon East':'400063',
+  'Jogeshwari West':'400102', 'Jogeshwari East':'400060',
+  'Andheri West':'400058',    'Andheri East':'400069',
+  'Vile Parle West':'400056', 'Vile Parle East':'400057',
+  'Santacruz West':'400054',  'Santacruz East':'400055',
+  'Khar West':'400052',       'Khar East':'400051',
+  'Bandra West':'400050',     'Bandra East':'400051',
+  'Dadar West':'400028',      'Dadar East':'400014',
+  'Kurla West':'400070',      'Kurla East':'400024',
+  'Vikhroli West':'400083',   'Vikhroli East':'400079',
+  'Bhandup West':'400078',    'Bhandup East':'400042',
+  'Mulund West':'400080',     'Mulund East':'400081',
+  'Dharavi':'400017',         'Chembur':'400071',
+  'Tilaknagar':'400089',      'Mankhurd':'400043',
+  'Govandi':'400043',         'Sion':'400022',
+  'Wadala':'400031',          'Worli':'400018',
+  'Prabhadevi':'400025',      'Tardeo':'400007',
+  'Grant Road':'400007',      'Byculla':'400027',
+  'Parel':'400012',           'Kamathipura':'400008',
+  'Nalasopara West':'401203', 'Nalasopara East':'401209',
+  'Vasai':'401202',
+};
+
+function lngToMetres(dLng) {
+  return Math.abs(dLng) * 111000 * Math.cos(19.1 * Math.PI / 180);
+}
+
+function getNearestMumbaiArea(lat, lng) {
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  for (const [alat, alng, radius, name] of MUMBAI_POINTS) {
+    const dLat = (alat - lat) * Math.PI / 180;
+    const dLng = (alng - lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 +
+              cosLat * Math.cos(alat * Math.PI / 180) * Math.sin(dLng/2)**2;
+    const dist = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    if (dist < radius) return name;
+  }
+  for (const [minLat, maxLat, name, stationLng] of MUMBAI_SUBURBS) {
+    if (lat >= minLat && lat < maxLat) {
+      if (stationLng === null) return name;
+      const distFromLine = lngToMetres(lng - stationLng);
+      if (distFromLine < BORDER_METRES) return 'Near ' + name + ' Station';
+      return lng < stationLng ? name + ' West' : name + ' East';
+    }
+  }
+  return null;
+}
+
+async function reverseGeocode(lat, lng) {
+  const localArea = getNearestMumbaiArea(lat, lng);
+  const nominatimPath = 'https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&zoom=18&addressdetails=1';
+  const proxies = [
+    nominatimPath,
+    'https://corsproxy.io/?' + nominatimPath,
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(nominatimPath),
+    'https://thingproxy.freeboard.io/fetch/' + nominatimPath,
+  ];
+  for (const url of proxies) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch(url, {
+        headers: {'Accept-Language':'en'},
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (!d || !d.address) continue;
+      const a = d.address;
+      const street = a.road || a.pedestrian || a.footway ||
+                     a.amenity || a.building || a.shop || a.office || '';
+      const area = localArea || a.suburb || a.neighbourhood || a.city_district || '';
+      const city = a.city || a.town || 'Mumbai';
+      const localPin = localArea ? MUMBAI_PINCODES[localArea] : null;
+      const pin = localPin ? ' - ' + localPin : (a.postcode ? ' - ' + a.postcode : '');
+      return [street, area, city].filter(Boolean).join(', ') + pin;
+    } catch { continue; }
+  }
+  return localArea ? localArea + ', Mumbai' : 'Mumbai';
+}
+
+// ════════════════════════════════════════
+// LIVE RISK CHECK
+// ════════════════════════════════════════
+function checkLiveRisk(userLat, userLng) {
+  const h=SH[_lastAutoSlot]||new Date().getHours();
+  const cache=buildZoneCache(h);
+  crimeZones.forEach((zone,i)=>{
+    const dist=getDistance(userLat,userLng,zone.lat,zone.lng);
+    const radius=zone.radius||200;
+    const riskScore=Math.min(cache[i]?cache[i].risk:zone.baseRisk,10);
+    const prev=zoneStates.get(zone.name);
+    if (dist>radius&&dist<=radius+WARN_BUFFER) {
+      if (prev!=='approaching'&&prev!=='inside') {
+        zoneStates.set(zone.name,'approaching');
+        showToast('Caution: '+riskLabel(riskScore).label+' zone ahead — '+zone.name);
+        if (navigator.vibrate) navigator.vibrate(100);
+        throttledSpeak('Caution. You are approaching a risk zone.');
+      }
+    } else if (dist<=radius) {
+      if (prev!=='inside') {
+        zoneStates.set(zone.name,'inside');
+        showToast('Entering '+riskLabel(riskScore).label+' area — '+zone.name);
+        if (navigator.vibrate) navigator.vibrate(riskScore>=6?[200,100,200]:[150]);
+        throttledSpeak(riskScore>=7.5?'Danger zone. Stay alert.':riskScore>=6?'Entering a high risk area.':'Entering a moderate risk area. Be cautious.');
+        if (riskScore>=REMINDER_MIN_RISK&&!reminderTimers.has(zone.name)) {
+          const id=setInterval(()=>{
+            if (zoneStates.get(zone.name)!=='inside'){clearInterval(id);reminderTimers.delete(zone.name);return;}
+            showToast('Still in risk zone — '+zone.name);
+            if (navigator.vibrate) navigator.vibrate(80);
+            throttledSpeak('Reminder: you are still within a risk zone.');
+          },REMINDER_INTERVAL_MS);
+          reminderTimers.set(zone.name,id);
+        }
+      }
+    } else {
+      if (prev) {
+        zoneStates.delete(zone.name);
+        if (reminderTimers.has(zone.name)){clearInterval(reminderTimers.get(zone.name));reminderTimers.delete(zone.name);}
+        if (prev==='inside'&&riskScore>=REMINDER_MIN_RISK) showToast('You have left the risk zone — '+zone.name);
+      }
+    }
+  });
+}
+
+let lastSpokenTime=0;
+function throttledSpeak(text){
+  const now=Date.now();
+  if (now-lastSpokenTime<12000) return;
+  lastSpokenTime=now;
+  speakAlert(text);
+}
+function speakAlert(text){
+  const msg=new SpeechSynthesisUtterance(text);
+  msg.lang='en-IN';msg.rate=0.95;msg.volume=1;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(msg);
+}
+
+function getDistance(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ════════════════════════════════════════
+// VOICE ENROLLMENT
+// ════════════════════════════════════════
+function openVoiceEnroll() {
+  document.getElementById('voiceEnrollModal').classList.add('open');
+  document.getElementById('voiceEnrollTitle').textContent = 'Set Up Voice Safety Check';
+  document.getElementById('voiceEnrollDesc').style.display = 'block';
+  document.getElementById('voiceEnrollProgress').style.display = 'none';
+  document.getElementById('voiceEnrollStartBtn').style.display = 'inline-flex';
+  document.getElementById('voiceEnrollStartBtn').disabled = false;
+  document.getElementById('voiceEnrollMic').classList.remove('active');
+
+  populateVoiceEnrollLangSelect();
+  updateVoiceEnrollLangHint();
+}
+
+// Fills the "Language you'll speak in" dropdown from VOICE_LANG_MAP,
+// pre-selecting whatever's already saved (or the UI language as default).
+function populateVoiceEnrollLangSelect() {
+  const select = document.getElementById('voiceEnrollLangSelect');
+  if (!select || typeof VOICE_LANG_MAP === 'undefined') return;
+
+  const current = (typeof getVoiceLangCode === 'function') ? getVoiceLangCode() : 'en';
+  select.innerHTML = '';
+  Object.keys(VOICE_LANG_MAP).forEach(code => {
+    const cfg = VOICE_LANG_MAP[code];
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = cfg.speechSupported ? cfg.label : `${cfg.label} (limited support)`;
+    if (code === current) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function onVoiceEnrollLangChange(code) {
+  if (typeof setVoiceLangCode === 'function') setVoiceLangCode(code);
+  updateVoiceEnrollLangHint();
+}
+
+function updateVoiceEnrollLangHint() {
+  const hint = document.getElementById('voiceEnrollLangHint');
+  if (hint && typeof getVoiceLangConfig === 'function') {
+    const cfg = getVoiceLangConfig();
+    hint.textContent = cfg.speechSupported
+      ? `We'll listen for your spoken safe-word in ${cfg.label}.`
+      : `Your browser can't reliably transcribe ${cfg.label} speech yet — please say "safe" or "I'm safe" in English or Hindi during SOS checks, even though the app is set to ${cfg.label}.`;
+  }
+}
+
+function closeVoiceEnroll() {
+  document.getElementById('voiceEnrollModal').classList.remove('open');
+}
+
+async function startVoiceEnrollment() {
+  if (!curUser) { showToast('Please sign in again to set up voice safety.'); return; }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Your browser does not support microphone access.');
+    return;
+  }
+
+  const startBtn  = document.getElementById('voiceEnrollStartBtn');
+  const progress  = document.getElementById('voiceEnrollProgress');
+  const mic       = document.getElementById('voiceEnrollMic');
+  const desc      = document.getElementById('voiceEnrollDesc');
+
+  startBtn.disabled = true;
+  startBtn.textContent = 'Recording…';
+  progress.style.display = 'block';
+  const vcfg = (typeof getVoiceLangConfig === 'function') ? getVoiceLangConfig() : null;
+  const examplePhrase = (vcfg && vcfg.safeWords && vcfg.safeWords[0]) ? vcfg.safeWords[0] : 'I am safe';
+  desc.textContent = `Say a short phrase like "${examplePhrase}" clearly, in a quiet spot, each time you're prompted.`;
+  mic.classList.add('active');
+
+  try {
+    await enrollUserVoice(curUser.id, (step, total, phase) => {
+      progress.textContent = phase === 'retry'
+        ? `Sample ${step} of ${total} was too quiet — get ready to say it again…`
+        : `Sample ${step} of ${total} — speak now`;
+    });
+    mic.classList.remove('active');
+    document.getElementById('voiceEnrollTitle').textContent = '✅ Voice Safety Ready';
+    desc.textContent = 'Your voiceprint is saved and encrypted. During SOS, the timer will only reset when it hears your voice.';
+    progress.style.display = 'none';
+    startBtn.style.display = 'none';
+    showToast('✅ Voice safety check enabled!');
+  } catch (e) {
+    console.error('Voice enrollment failed:', e);
+    mic.classList.remove('active');
+    progress.style.display = 'none';
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try Again';
+    const msg = (e && e.name === 'NotAllowedError')
+      ? 'Microphone access was blocked — allow it in your browser settings and try again.'
+      : (e && e.message) || 'Something went wrong recording your voice — please try again.';
+    desc.textContent = msg;
+    showToast('⚠️ Voice enrollment failed');
+  }
+}
+
+// ════════════════════════════════════════
+// SOS — with 15 second countdown before first alert
+// ════════════════════════════════════════
+let _sosInterval   = null;
+let _sosCountdown  = null;
+let _sosCheckCount = 0;
+let _sosActive     = false;
+let _countdownSecs = 15;
+
+let _lastVoiceScore = null;
+
+async function openSOS() {
+  if (_sosActive) return;
+  _sosActive = true;
+
+  document.getElementById('sm').classList.add('open');
+  document.getElementById('cs').style.display = 'none';
+  document.getElementById('cs').style.color   = '';
+
+  // Decide whether we can use voice verification for this session
+  const manualBtn = document.getElementById('manual-safe-btn');
+  const vsEl = document.getElementById('voice-status');
+  let voiceReady = false;
+  if (curUser) {
+    try { voiceReady = await hasVoiceProfile(curUser.id); } catch(e) { voiceReady = false; }
+  }
+  if (voiceReady) {
+    manualBtn.style.display = 'none';
+    vsEl.style.display = 'flex';
+    const relisten = () => {
+      // Keep trying for the rest of this countdown after a miss/mismatch.
+      setTimeout(() => {
+        if (_sosActive && voiceChecker && _countdownSecs > 2) voiceChecker.listenOnce((_countdownSecs - 1) * 1000);
+      }, 800);
+    };
+    const showManual = (txt) => { setVoiceStatus('', txt); manualBtn.style.display = 'inline-flex'; };
+    voiceChecker = new VoiceVerifiedCheckIn(curUser.id, {
+      onVerified: (transcript, score) => { _lastVoiceScore = score; setVoiceStatus('verified', '✅ Voice verified — resetting timer'); confirmSafe(); },
+      onMismatch: (transcript, score) => { _lastVoiceScore = score; setVoiceStatus('mismatch', "⚠️ That didn't sound like you — try again, timer keeps running"); showToast('⚠️ Voice not recognized'); relisten(); },
+      onNoProfile: (transcript, reason) => showManual(reason === 'outdated_profile'
+        ? 'Voice Safety needs re-recording (🎙️ Voice Safety, top bar) — tap below to confirm for now'
+        : 'Voice not set up — tap below to confirm'),
+      onNoSpeech: () => { setVoiceStatus('listening', 'Didn\'t catch that — say "I\'m safe" clearly'); relisten(); },
+      onHeard: (text) => setVoiceStatus('listening', `Heard "${text.slice(0, 40)}" — say "I'm safe"`),
+      onPrompt: (msg) => setVoiceStatus('listening', msg),
+      onUnsupported: (why) => showManual(why === 'mic_blocked'
+        ? 'Microphone is blocked in this browser — tap below to confirm you\'re safe'
+        : 'This browser can\'t do voice check-ins (try Chrome) — tap below to confirm you\'re safe')
+    });
+  } else {
+    // No voiceprint enrolled yet — fall back to the manual tap so safety isn't blocked
+    manualBtn.style.display = 'inline-flex';
+    vsEl.style.display = 'none';
+  }
+
+  // Start 15 second countdown before sending first alert
+  startCountdown(voiceReady);
+}
+
+function setVoiceStatus(state, text) {
+  const el = document.getElementById('voice-status');
+  el.className = state || '';
+  document.getElementById('voice-status-text').textContent = text;
+}
+
+let _graceUsed = false;
+function startCountdown(voiceReady) {
+  _countdownSecs = 15;
+  _graceUsed = false;
+  updateCountdownUI();
+
+  if (navigator.vibrate) navigator.vibrate(200);
+
+  if (voiceReady && voiceChecker) {
+    setVoiceStatus('listening', 'Say "I\'m safe" — your voice will be verified');
+    console.log('[VOICE] starting listenOnce for this 15s cycle');
+    voiceChecker.listenOnce(_countdownSecs * 1000 - 500);
+  }
+
+  _sosCountdown = setInterval(() => {
+    _countdownSecs--;
+    updateCountdownUI();
+
+    if (_countdownSecs <= 0 && voiceChecker && voiceChecker.verifying && !_graceUsed) {
+      // A voice match is being checked right now — give it a few seconds before alerting.
+      _graceUsed = true; _countdownSecs = 4; updateCountdownUI(); return;
+    }
+    if (_countdownSecs <= 0) {
+      clearInterval(_sosCountdown);
+      _sosCountdown = null;
+      if (voiceChecker) voiceChecker.stop();
+      fireAlert(voiceReady);
+    }
+  }, 1000);
+}
+
+function updateCountdownUI() {
+  const sst = document.getElementById('sst');
+  if (_countdownSecs > 0) {
+    sst.textContent = '⏱ Sending alert in ' + _countdownSecs + ' seconds…';
+    sst.style.color = _countdownSecs <= 5 ? '#f43f5e' : '#f59e0b';
+  }
+}
+
+async function fireAlert(voiceReady) {
+  _sosCheckCount++;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '🚨 Alert sent to your emergency contacts!';
+  sst.style.color = '#f43f5e';
+
+  const csEl = document.getElementById('cs');
+  csEl.style.display = 'block';
+  csEl.textContent   = '🚨 Location sent — closing SOS…';
+  csEl.style.color   = '#f43f5e';
+
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+
+  // Stop listening/counting immediately — this alert fires exactly once
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
+  if (voiceChecker) voiceChecker.stop();
+
+  showToast('🚨 Emergency alert sent!');
+
+  navigator.geolocation && navigator.geolocation.getCurrentPosition(async pos => {
+    if (!curUser) return;
+    try {
+      const r = await triggerEmergencyAlert(curUser.id, pos.coords.latitude, pos.coords.longitude);
+      if (r.success) {
+        activeAlertId = r.alertId;
+        showToast(r.sent === r.total
+          ? `🚨 Alert emailed to ${r.sent} contact${r.sent > 1 ? 's' : ''}.`
+          : `🚨 Alert emailed to ${r.sent} of ${r.total} contacts.`);
+        if (activeAlertId && _lastVoiceScore !== null) {
+          try {
+            await supabase.from('emergency_alerts')
+              .update({ voice_verified: false, voice_match_score: _lastVoiceScore })
+              .eq('id', activeAlertId);
+          } catch(e) { console.warn('Could not log voice score:', e); }
+        }
+      }
+      else showToast('⚠️ ' + (r.error || 'Alert could not be sent'));
+    } catch(e) { console.error('Alert error:', e); }
+  }, err => {
+    console.warn('Geolocation failed during SOS:', err);
+    showToast('⚠️ Could not get your location — allow location access so SOS can be sent.');
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+
+  // Alert has been sent — close the SOS session automatically after a moment
+  // so the person can see the confirmation before the panel disappears.
+  setTimeout(() => { closeSOS(); }, 3000);
+}
+
+// Voice verified as a match — cancels current countdown, starts a fresh one
+function confirmSafe() {
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
+  if (voiceChecker) voiceChecker.stop();
+  _lastVoiceScore = null;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '✅ Good! Next check in 15 seconds…';
+  sst.style.color = 'var(--teal)';
+
+  showToast('✅ Stay safe — checking again in 15 seconds.');
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Brief pause then restart countdown
+  setTimeout(() => startCountdown(true), 1500);
+}
+
+// Fallback path — only shown when the user has no voice profile enrolled
+function manualConfirmSafe() {
+  clearInterval(_sosCountdown);
+  _sosCountdown = null;
+
+  const sst = document.getElementById('sst');
+  sst.textContent = '✅ Good! Next check in 15 seconds…';
+  sst.style.color = 'var(--teal)';
+
+  showToast('✅ Stay safe — checking again in 15 seconds. Consider setting up Voice Safety for stronger protection.');
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  setTimeout(() => startCountdown(false), 1500);
+}
+
+// Cancel — fully stops SOS monitoring
+function closeSOS() {
+  const waBtn = document.getElementById('whatsapp-alert-btn');
+if (waBtn) { waBtn.style.display = 'none'; waBtn.href = '#'; }
+  _sosActive = false;
+  clearInterval(_sosCountdown);
+  clearInterval(_sosInterval);
+  _sosCountdown  = null;
+  _sosInterval   = null;
+  _sosCheckCount = 0;
+  _countdownSecs = 15;
+
+  if (voiceChecker) { voiceChecker.stop(); voiceChecker = null; }
+  _lastVoiceScore = null;
+
+  document.getElementById('sm').classList.remove('open');
+  document.getElementById('cs').style.display = 'none';
+  document.getElementById('cs').style.color   = '';
+  document.getElementById('sst').style.color  = '';
+  document.getElementById('sst').textContent  = 'Notifying your emergency contacts with live location.';
+  document.getElementById('sos-voice-hint').style.display = 'none';
+  document.getElementById('voice-status').style.display = 'none';
+  document.getElementById('manual-safe-btn').style.display = 'none';
+
+  showToast('SOS monitoring stopped.');
+}
+
+// ════════════════════════════════════════
+// FEEDBACK
+// ════════════════════════════════════════
+// ════════════════════════════════════════
+// PER-WAYPOINT SAFETY REVIEW
+// Triggers when live navigation gets within ARRIVAL_RADIUS of the destination.
+// Asks about each named stop on the trip (not just the destination) — reuses
+// the chatbot's own trip breakdown (window.SP_LAST_TRIP_WAYPOINTS) when the
+// last trip was planned through it and still matches this destination;
+// otherwise falls back to just the start and end points on the map.
+// Needs supabase/migrations/002_waypoint_ratings.sql — see that file.
+// ════════════════════════════════════════
+const ARRIVAL_RADIUS = 10; // metres
+let _reviewQueue = null;   // { list: [{name,lat,lng}], i }
+let _reviewTriggered = false;
+
+function reviewVoterId() {
+  try {
+    let id = localStorage.getItem('sp_voter_id');
+    if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : 'v' + Date.now() + Math.random().toString(36).slice(2)); localStorage.setItem('sp_voter_id', id); }
+    return id;
+  } catch (e) { return 'anon'; }
+}
+function reviewSlot(h) {
+  return h >= 5 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : h >= 17 && h < 21 ? 'evening' : 'night';
+}
+async function submitWaypointReviewDash(pt, feltUnsafe) {
+  if (!window.supabase) return false;
+  try {
+    const { error } = await window.supabase.from('waypoint_ratings').insert({
+      lat: pt.lat, lng: pt.lng, place_name: pt.name, time_slot: reviewSlot(new Date().getHours()), felt_unsafe: feltUnsafe, voter_id: reviewVoterId()
+    });
+    return !error;
+  } catch (e) { return false; }
+}
+
+function triggerArrivalReview() {
+  if (_reviewTriggered) return;
+  let wps = (window.SP_LAST_TRIP_WAYPOINTS || []).slice();
+  const last = wps[wps.length - 1];
+  const dest = toCoords || (last ? [last.lat, last.lng] : null);
+  if (!last || (toCoords && getDistance(last.lat, last.lng, toCoords[0], toCoords[1]) > 400)) {
+    // The chatbot's last trip doesn't match this destination — fall back to whatever points we do have.
+    wps = [];
+    const fromLabel = ((document.getElementById('inp-from') || {}).value || 'Start point').split(',')[0];
+    const toLabel = ((document.getElementById('inp-to') || {}).value || 'Destination').split(',')[0];
+    if (fromCoords) wps.push({ name: fromLabel, lat: fromCoords[0], lng: fromCoords[1] });
+    if (toCoords) wps.push({ name: toLabel, lat: toCoords[0], lng: toCoords[1] });
+  }
+  if (!wps.length) {
+    // No route has ever been set (e.g. testing the button on its own) — use a
+    // placeholder point purely so the review flow itself can still be demonstrated.
+    wps = [{ name: 'Demo location', lat: 19.0760, lng: 72.8777 }];
+  }
+  _reviewTriggered = true;
+  _reviewQueue = { list: wps, i: 0 };
+  document.getElementById('reviewModal').style.display = 'block';
+  renderReviewQuestion();
+}
+
+function renderReviewQuestion() {
+  if (!_reviewQueue) return;
+  document.getElementById('rvPlaceName').textContent = _reviewQueue.list[_reviewQueue.i].name;
+}
+
+async function answerReviewDash(val) {
+  const q = _reviewQueue; if (!q) return;
+  const pt = q.list[q.i];
+  if (val !== 'skip') await submitWaypointReviewDash(pt, val === 'no');
+  q.i++;
+  if (q.i >= q.list.length) {
+    document.getElementById('reviewModal').style.display = 'none';
+    _reviewQueue = null;
+    showToast('Thanks for your safety review! 🙏');
+    return;
+  }
+  renderReviewQuestion();
+}
+
+function reviewHasPending() {
+  return !!_reviewQueue && _reviewQueue.i < _reviewQueue.list.length;
+}
+
+// Called by the panel's own ✕ button.
+function closeReviewModalAttempt() {
+  if (reviewHasPending() && !confirm('Your safety review for this trip hasn\'t been submitted yet. Close without answering?')) return;
+  document.getElementById('reviewModal').style.display = 'none';
+  _reviewQueue = null;
+}
+
+// ════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ════════════════════════════════════════
+// PANEL COLLAPSE / EXPAND
+// ════════════════════════════════════════
+function togglePanel(forceCollapse) {
+  const panel  = document.getElementById('panel');
+  const toggle = document.getElementById('panel-toggle');
+  const sos    = document.getElementById('sm');
+  const sosCircle = document.getElementById('sos-circle');
+  const shouldCollapse = (forceCollapse === true) || !panel.classList.contains('collapsed');
+
+  panel.classList.toggle('collapsed', shouldCollapse);
+  toggle.classList.toggle('collapsed', shouldCollapse);
+
+  toggle.style.display = shouldCollapse ? 'flex' : 'none';
+  toggle.style.left = shouldCollapse ? '0px' : 'var(--panel)';
+
+  if (sosCircle) sosCircle.classList.toggle('visible', shouldCollapse);
+  if (sos) sos.classList.toggle('panel-gone', shouldCollapse);
+
+  setTimeout(() => { if (map) map.invalidateSize({ animate: true }); }, 360);
+}
+
+function openPanel() {
+  const panel = document.getElementById('panel');
+  if (!panel.classList.contains('collapsed')) return;
+  togglePanel(false);
+  setTimeout(() => {
+    const pi = document.getElementById('pi');
+    if (pi) pi.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 360);
+}
+
+// ════════════════════════════════════════
+// NAV HUD STATE
+// ════════════════════════════════════════
+let _navHudOpen = false;
+let _navEtaInterval = null;
+
+function startNavigation() {
+  togglePanel(true);
+  document.getElementById('panel').style.visibility = 'hidden';
+  document.getElementById('panel-toggle').style.display = 'none';
+  const leafletLocate = document.querySelector('.locate-btn');
+  if (leafletLocate) leafletLocate.style.display = 'none';
+
+  if (!trackingOn) {
+    startLiveTracking();
+    trackingOn = true;
+  }
+
+  showNavHud();
+
+  const initLat = fromCoords ? fromCoords[0] : 19.076;
+  const initLng = fromCoords ? fromCoords[1] : 72.877;
+
+  placeLocationMarker(initLat, initLng, 30, null);
+
+  if (routeLayers && routeLayers.length) {
+    routeLayers.forEach((layer, i) => {
+      if (!layer) return;
+      if (i !== selIdx) {
+        map.removeLayer(layer);
+      } else {
+        const ll = layer.getLatLngs();
+        if (ll && ll.length > 1) {
+          const newLl = [L.latLng(initLat, initLng), ...ll.slice(1)];
+          layer.setLatLngs(newLl);
+          layer.setStyle({ opacity: 0.9, weight: 6 });
+        }
+      }
+    });
+  }
+
+  if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+
+  setTimeout(() => {
+    map.setView([initLat, initLng], NAV_ZOOM, { animate: false });
+  }, 450);
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+        fromCoords = [lat, lng];
+        placeLocationMarker(lat, lng, acc, _compassHeading);
+        if (map.getZoom() < 16) {
+          map.setView([lat, lng], NAV_ZOOM, { animate: true });
+        }
+        const layer = routeLayers[selIdx];
+        if (layer && map.hasLayer(layer)) {
+          const ll = layer.getLatLngs();
+          if (ll && ll.length > 1) {
+            const newLl = [L.latLng(lat, lng), ...ll.slice(1)];
+            layer.setLatLngs(newLl);
+          }
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
+    );
+  }
+}
+
+function showNavHud() {
+  const hud = document.getElementById('nav-hud');
+  hud.style.animation = 'none';
+  hud.offsetHeight;
+  hud.style.animation = '';
+  hud.classList.add('visible');
+
+  _navHudOpen = false;
+  const scroll = document.getElementById('nav-scroll');
+  if (scroll) { scroll.classList.remove('open'); scroll.scrollTop = 0; }
+  const divider = document.getElementById('nav-peek-div');
+  if (divider) divider.style.display = 'none';
+  const locBtn = document.getElementById('nav-locate-btn');
+  if (locBtn) { locBtn.classList.add('nav-visible'); locBtn.classList.remove('nav-hidden'); }
+  _navFollowMode = true;
+
+  const sosCircle = document.getElementById('sos-circle');
+  if (sosCircle && !_sosActive) sosCircle.classList.remove('visible');
+
+  updateZoneMuteBtn();
+
+  populateNdRoutes();
+  document.querySelectorAll('.nd-mode-sw .nd-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === travelMode);
+  });
+
+  const emojiEl = document.getElementById('nstat-dest-emoji');
+  if (emojiEl) {
+    emojiEl.textContent = _destEmoji || '📍';
+    emojiEl.style.display = 'block';
+  }
+  updateNavStats(true);
+
+  setTimeout(() => {
+    if (map) map.invalidateSize();
+    updateNavLocatePos();
+  }, 520);
+}
+
+function updateNavLocatePos() {
+  const btn   = document.getElementById('nav-locate-btn');
+  const sheet = document.getElementById('nav-sheet');
+  if (!btn || !sheet) return;
+  const sheetH = sheet.offsetHeight || 145;
+  btn.style.bottom = (sheetH + 10) + 'px';
+}
+
+function populateNdRoutes() {
+  const list = document.getElementById('nd-routes');
+  list.innerHTML = '';
+  const labels = ['🛡️ Safest', '⚡ Fastest', '🔀 Alternate'];
+
+  const order = [selIdx, ...curRoutes.map((_,i) => i).filter(i => i !== selIdx)];
+
+  order.forEach(i => {
+    if (!curRoutes[i]) return;
+    const r = curRoutes[i];
+    const item = document.createElement('div');
+    item.className = 'nd-route-item' + (i === selIdx ? ' sel' : '');
+    item.innerHTML =
+      '<div><div class="ndr-label">' + (labels[i] || 'Route '+(i+1)) + '</div>'
+      + '<div class="ndr-meta">' + r.dist + ' · ' + r.dur + '</div></div>'
+      + (i === selIdx ? '<span class="ndr-badge">Active</span>' : '');
+    item.onclick = () => {
+      selIdx = i;
+      if (_navMode) {
+        routeLayers.forEach((l, ri) => {
+          if (!l) return;
+          if (ri !== i) { if (map.hasLayer(l)) map.removeLayer(l); }
+          else {
+            if (!map.hasLayer(l)) map.addLayer(l);
+            l.setStyle({ opacity: 0.9, weight: 6 });
+            l.bringToFront();
+            if (fromCoords) {
+              const ll = l.getLatLngs();
+              if (ll && ll.length > 1)
+                l.setLatLngs([L.latLng(fromCoords[0], fromCoords[1]), ...ll.slice(1)]);
+            }
+          }
+        });
+        _statsLastLat = null; _statsLastLng = null;
+      } else {
+        selectRoute(i);
+      }
+      populateNdRoutes();
+      updateNavStats(true);
+    };
+    list.appendChild(item);
+  });
+}
+
+let _statsLastLat  = null;
+let _statsLastLng  = null;
+let _statsDistM    = null;
+let _statsDurSecs  = null;
+
+function updateNavStats(forceUpdate) {
+  if (!curRoutes.length || selIdx >= curRoutes.length) return;
+  const r = curRoutes[selIdx];
+
+  let distM   = r.distM   || 0;
+  let durSecs = r.durSecs || 0;
+
+  if (_navMode && fromCoords && toCoords) {
+    const movedDist = (_statsLastLat !== null)
+      ? getDistance(fromCoords[0], fromCoords[1], _statsLastLat, _statsLastLng)
+      : 999;
+
+    if (forceUpdate || movedDist >= 10) {
+      let remainDist = 0;
+      const activeLayer = routeLayers[selIdx];
+      if (activeLayer && map.hasLayer(activeLayer)) {
+        const ll = activeLayer.getLatLngs();
+        for (let i = 0; i < ll.length - 1; i++) {
+          remainDist += getDistance(ll[i].lat, ll[i].lng, ll[i+1].lat, ll[i+1].lng);
+        }
+      }
+      if (remainDist < 1) {
+        remainDist = getDistance(fromCoords[0], fromCoords[1], toCoords[0], toCoords[1]);
+      }
+
+      const totalDurSecs = r.durSecs || 1;
+      const totalDistM   = r.distM   || 1;
+      const ratio = Math.max(0, Math.min(remainDist / totalDistM, 1));
+      distM   = remainDist;
+      durSecs = totalDurSecs * ratio;
+
+      _statsDistM   = distM;
+      _statsDurSecs = durSecs;
+      _statsLastLat = fromCoords[0];
+      _statsLastLng = fromCoords[1];
+    } else {
+      if (_statsDistM !== null) { distM = _statsDistM; durSecs = _statsDurSecs; }
+    }
+  }
+  if (!_navMode || distM === 0) {
+    distM   = r.distM   || 0;
+    durSecs = r.durSecs || 0;
+  }
+
+  const distStr = distM < 1000
+    ? Math.round(distM) + ' m'
+    : (distM / 1000).toFixed(1) + ' km';
+
+  const durMin = Math.round(durSecs / 60);
+  const timeStr = durMin >= 60
+    ? Math.floor(durMin/60) + 'h ' + (durMin%60 > 0 ? durMin%60+'m' : '')
+    : durMin + ' min';
+
+  const eta = new Date(Date.now() + durSecs * 1000);
+  const etaStr = eta.getHours().toString().padStart(2,'0') + ':'
+               + eta.getMinutes().toString().padStart(2,'0');
+
+  const distEl = document.getElementById('nstat-dist');
+  if (distEl) distEl.textContent = distStr;
+  const timeEl = document.getElementById('nstat-time-val');
+  if (timeEl) timeEl.textContent = timeStr;
+  const etaEl  = document.getElementById('nstat-eta');
+  if (etaEl)  etaEl.textContent  = etaStr;
+}
+
+function _onMapClickCloseDrawer() {
+  if (_navHudOpen) toggleNavDrawer();
+}
+
+function toggleNavDrawer() {
+  _navHudOpen = !_navHudOpen;
+  const scroll  = document.getElementById('nav-scroll');
+  const divider = document.getElementById('nav-peek-div');
+  const locBtn  = document.getElementById('nav-locate-btn');
+  if (scroll) scroll.classList.toggle('open', _navHudOpen);
+  if (divider) divider.style.display = _navHudOpen ? 'block' : 'none';
+
+  if (locBtn) {
+    if (_navHudOpen) {
+      locBtn.classList.add('nav-hidden');
+    } else {
+      locBtn.classList.remove('nav-hidden');
+      setTimeout(updateNavLocatePos, 460);
+    }
+  }
+
+  if (_navHudOpen) {
+    setTimeout(() => map.once('click', _onMapClickCloseDrawer), 50);
+  } else {
+    map.off('click', _onMapClickCloseDrawer);
+  }
+
+  setTimeout(() => { if (map) map.invalidateSize(); }, 460);
+}
+
+function ndSetMode(btn) {
+  travelMode = btn.dataset.mode;
+  document.querySelectorAll('.nd-mode-sw .nd-mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#mode-sw .sbt').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === travelMode);
+  });
+  if (!fromCoords || !toCoords) return;
+  showToast('Recalculating…');
+  clearTimeout(_modeDebounce);
+  _modeDebounce = setTimeout(async () => {
+    await refetchRoutes();
+    showToast('✅ Route updated');
+  }, 500);
+}
+
+function exitNavigation() {
+  if (reviewHasPending() && !confirm('You have an unanswered safety review for this trip. Exit and discard it?')) return;
+  _reviewQueue = null;
+  document.getElementById('reviewModal').style.display = 'none';
+  if (_sosActive) closeSOS();
+  clearInterval(_navEtaInterval);
+  _navEtaInterval = null;
+  _navHudOpen = false;
+  trackingOn = false;
+
+  const hud = document.getElementById('nav-hud');
+  hud.classList.remove('visible');
+  hud.style.display = '';
+  hud.style.animation = '';
+  const scroll2 = document.getElementById('nav-scroll');
+  if (scroll2) { scroll2.classList.remove('open'); scroll2.scrollTop = 0; }
+  const divider2 = document.getElementById('nav-peek-div');
+  if (divider2) divider2.style.display = 'none';
+  const locBtn2 = document.getElementById('nav-locate-btn');
+  if (locBtn2) { locBtn2.classList.remove('nav-visible'); locBtn2.classList.add('nav-hidden'); }
+
+  if (map) map.off('click', _onMapClickCloseDrawer);
+
+  document.documentElement.style.removeProperty('--peek-h');
+  document.documentElement.style.removeProperty('--hud-h');
+
+  stopLiveTracking();
+  if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
+  traversedCoords = [];
+
+  routeLayers.forEach(l => { if (l) map.removeLayer(l); });
+  routeLayers = [];
+  curRoutes = [];
+  selIdx = 0;
+
+  if (fromMarker) { map.removeLayer(fromMarker); fromMarker = null; }
+  if (toMarker)   { map.removeLayer(toMarker);   toMarker   = null; }
+
+  toCoords = null;
+  _destEmoji = '📍';
+
+  document.getElementById('inp-to').value = '';
+  document.getElementById('inp-to').placeholder = 'Type any place — Churchgate, IIT, Juhu Beach…';
+  const toClearBtn = document.getElementById('to-clear');
+  if (toClearBtn) toClearBtn.classList.remove('visible');
+  const emojiEl2 = document.getElementById('nstat-dest-emoji');
+  if (emojiEl2) emojiEl2.style.display = 'none';
+
+  document.getElementById('rsec').style.display = 'none';
+  document.getElementById('bfind').style.display = 'none';
+  document.getElementById('mode-section').style.display    = 'none';
+  document.getElementById('mode-div-top').style.display    = 'none';
+  document.getElementById('mode-div-bottom').style.display = 'none';
+
+  travelMode = 'foot-walking';
+  document.querySelectorAll('#mode-sw .sbt').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === 'foot-walking');
+  });
+
+  document.getElementById('cat-panel').classList.remove('open');
+  document.getElementById('cat-toggle').classList.remove('open');
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+
+  const leafletLocate2 = document.querySelector('.locate-btn');
+  if (leafletLocate2) leafletLocate2.style.display = '';
+  document.getElementById('panel').style.visibility = '';
+  document.getElementById('panel-toggle').style.display = '';
+  openPanel();
+  setTimeout(() => {
+    const pi = document.getElementById('pi');
+    if (pi) pi.scrollTo({ top: 0, behavior: 'smooth' });
+    if (map) {
+      map.invalidateSize({ animate: true });
+      if (locMarker) {
+        const ll = locMarker.getLatLng();
+        map.flyTo([ll.lat, ll.lng], DEFAULT_ZOOM, { animate: true, duration: 1.2 });
+      } else if (fromCoords) {
+        map.flyTo(fromCoords, DEFAULT_ZOOM, { animate: true, duration: 1.2 });
+      } else {
+        map.setView([19.076, 72.8777], 12, { animate: true });
+      }
+    }
+  }, 420);
+
+  showToast('Navigation ended');
+}
+
+// ════════════════════════════════════════
+// THEME TOGGLE
+// ════════════════════════════════════════
+function toggleTheme() {
+  const isLight=document.documentElement.classList.toggle('light');
+  document.getElementById('icon-sun').style.display=isLight?'none':'';
+  document.getElementById('icon-moon').style.display=isLight?'':'none';
+  localStorage.setItem('sp-theme',isLight?'light':'dark');
+  if (tileLayer) map.removeLayer(tileLayer);
+  tileLayer=makeTileLayer(isLight).addTo(map);
+  tileLayer.bringToBack();
+  if (heatOn&&heatLayer) heatLayer.addTo(map);
+  zoneMarkers.forEach(m=>{ if(zonesOn) m.addTo(map); });
+}
+
+function applyStoredTheme() {
+  const stored=localStorage.getItem('sp-theme');
+  if (stored!=='dark') {
+    document.documentElement.classList.add('light');
+    document.getElementById('icon-sun').style.display='none';
+    document.getElementById('icon-moon').style.display='';
+  }
+}
+
+// ════════════════════════════════════════
+// LIVE TRACKING
+// ════════════════════════════════════════
+let traversedCoords = [];
+let traversedLayer  = null;
+let _liveSpeedMps       = null;
+let _navFollowMode      = false;
+let _offRouteCount      = 0;
+let _isRecalculating    = false;
+let _rerouteDebounce    = null;
+const OFF_ROUTE_METRES  = 80;
+const OFF_ROUTE_TICKS   = 3;
+let _navMode            = false;
+let _lastHeading        = null;
+let _compassHeading     = null;
+let _compassListener    = null;
+
+function startCompass() {
+  if (!window.DeviceOrientationEvent) return;
+  let _lastUpdate = 0;
+
+  function handleOrientation(e) {
+    let heading = null;
+    if (e.webkitCompassHeading !== undefined && e.webkitCompassHeading !== null) {
+      heading = e.webkitCompassHeading;
+    } else if (e.absolute && e.alpha !== null) {
+      heading = (360 - e.alpha) % 360;
+    } else if (e.alpha !== null) {
+      heading = (360 - e.alpha) % 360;
+    }
+    if (heading === null) return;
+    _compassHeading = heading;
+    _lastHeading    = heading;
+    if (!_navMode) return;
+
+    const now = Date.now();
+    if (now - _lastUpdate < 33) return;
+    _lastUpdate = now;
+
+    const arrowEl = document.querySelector('.nav-arrow');
+    if (arrowEl) {
+      arrowEl.style.transform = 'rotate(' + heading + 'deg)';
+    } else if (locMarker) {
+      const ll = locMarker.getLatLng();
+      placeLocationMarker(ll.lat, ll.lng, 20, heading);
+    }
+  }
+
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(p => {
+        if (p === 'granted') {
+          window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+          window.addEventListener('deviceorientation',         handleOrientation, true);
+          _compassListener = handleOrientation;
+        }
+      }).catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation',         handleOrientation, true);
+    _compassListener = handleOrientation;
+  }
+}
+
+function stopCompass() {
+  if (_compassListener) {
+    window.removeEventListener('deviceorientationabsolute', _compassListener, true);
+    window.removeEventListener('deviceorientation',         _compassListener, true);
+    _compassListener = null;
+  }
+  _compassHeading = null;
+}
+
+// Speaks up once when live tracking crosses INTO a higher-risk area, and again if it
+// gets clear of it — not on every GPS tick, and not while nothing has changed.
+let _zoneAlertState = null;   // null | 'safe' | 'risky'
+let _zoneAlertAt = 0;
+let _zoneAlertMuted = (localStorage.getItem('sp_zone_alert_muted') === '1');
+const ZONE_ALERT_RISK = 6;        // score (0–10) that counts as "unsafe"
+const ZONE_ALERT_REPEAT_MS = 3 * 60 * 1000; // don't repeat the same warning more than once per 3 min
+
+// Single choke point for unsafe-zone speech: always shows a toast (so the alert is
+// still visible if voice is muted or speech synthesis isn't available), and only
+// speaks aloud when the user hasn't muted these alerts.
+function announceZoneRisk(text) {
+  showToast('⚠️ ' + text);
+  if (!_zoneAlertMuted) speakAlert(text);
+}
+
+function toggleZoneAlertMute() {
+  _zoneAlertMuted = !_zoneAlertMuted;
+  try { localStorage.setItem('sp_zone_alert_muted', _zoneAlertMuted ? '1' : '0'); } catch (e) {}
+  if (_zoneAlertMuted && window.speechSynthesis) window.speechSynthesis.cancel();
+  updateZoneMuteBtn();
+  showToast(_zoneAlertMuted ? '🔇 Unsafe-zone voice alerts muted' : '🔊 Unsafe-zone voice alerts on');
+}
+
+function updateZoneMuteBtn() {
+  const btn = document.getElementById('zone-mute-btn');
+  if (!btn) return;
+  btn.innerHTML = _zoneAlertMuted ? '🔇 Unmute Unsafe-Zone Voice Alerts' : '🔊 Mute Unsafe-Zone Voice Alerts';
+  btn.style.borderColor = _zoneAlertMuted ? 'var(--red)' : '';
+  btn.style.color = _zoneAlertMuted ? 'var(--red)' : '';
+}
+
+// TEST HELPER — lets you see/hear exactly what a real unsafe-zone crossing does,
+// without needing to physically walk into a mapped high-risk area.
+function simulateUnsafeZone() {
+  announceZoneRisk('Caution. You are entering a higher risk area. Stay alert and consider a well lit, busier route. This is a test alert.');
+}
+
+function checkZoneVoiceAlert(lat, lng) {
+  try {
+    if (!crimeZones.length) return;
+    const score = scorePoint(lat, lng, buildZoneCache(new Date().getHours()));
+    const risky = score >= ZONE_ALERT_RISK, now = Date.now();
+    if (risky && (_zoneAlertState !== 'risky' || now - _zoneAlertAt > ZONE_ALERT_REPEAT_MS)) {
+      announceZoneRisk('Caution. You are entering a higher risk area. Stay alert and consider a well lit, busier route.');
+      _zoneAlertState = 'risky'; _zoneAlertAt = now;
+    } else if (!risky && _zoneAlertState === 'risky') {
+      _zoneAlertState = 'safe'; // silent — only the entry warning is spoken, not a constant "all clear"
+    }
+  } catch (e) { /* voice alert is best-effort; never block navigation over it */ }
+}
+
+function startLiveTracking() {
+  if (liveWatchId !== null) return;
+
+  if (!navigator.geolocation) {
+    showToast('Geolocation not supported on this device');
+    return;
+  }
+
+  _zoneAlertState = null; _zoneAlertAt = 0;
+  _reviewTriggered = false;
+  traversedCoords = [];
+  _lastHeading      = null;
+  _compassHeading   = null;
+  _statsLastLat     = null;
+  _statsLastLng     = null;
+  _statsDistM       = null;
+  _statsDurSecs     = null;
+  _offRouteCount    = 0;
+  _isRecalculating  = false;
+  _navMode = true;
+  _navFollowMode = true;
+  startCompass();
+  if (traversedLayer) { map.removeLayer(traversedLayer); traversedLayer = null; }
+
+  liveWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const { latitude: lat, longitude: lng, accuracy: acc, speed: gpsSpeed } = pos.coords;
+      if (gpsSpeed !== null && gpsSpeed >= 0) _liveSpeedMps = gpsSpeed;
+
+      placeLocationMarker(lat, lng, acc, _compassHeading !== null ? _compassHeading : _lastHeading);
+      checkZoneVoiceAlert(lat, lng);
+
+      fromCoords = [lat, lng];
+      traversedCoords.push([lat, lng]);
+
+      if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
+        const routeLatLngs = routeLayers[selIdx].getLatLngs();
+        if (routeLatLngs.length > 1) {
+          let closestIdx = 0;
+          let minDist = Infinity;
+          for (let i = 0; i < routeLatLngs.length; i++) {
+            const d = getDistance(lat, lng, routeLatLngs[i].lat, routeLatLngs[i].lng);
+            if (d < minDist) { minDist = d; closestIdx = i; }
+          }
+
+          if (minDist > OFF_ROUTE_METRES) {
+            _offRouteCount++;
+            if (_offRouteCount === 1) {
+              showToast('⚠️ You are off route — recalculating…');
+              if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            }
+            if (_offRouteCount >= OFF_ROUTE_TICKS) {
+              _offRouteCount = 0;
+              clearTimeout(_rerouteDebounce);
+              _rerouteDebounce = setTimeout(() => {
+                if (!_navMode || !toCoords) return;
+                showToast('🔄 Recalculating safest route…');
+                _navMode = false;
+                findRoutes().then(() => {
+                  _navMode = true;
+                  routeLayers.forEach((l, i) => {
+                    if (l && i !== selIdx) map.removeLayer(l);
+                  });
+                  populateNdRoutes();
+                  updateNavStats(true);
+                  showToast('✅ New safest route found');
+                }).catch(() => {
+                  _navMode = true;
+                  showToast('Could not recalculate — check connection');
+                });
+              }, 2000);
+            }
+          } else {
+            _offRouteCount = 0;
+            clearTimeout(_rerouteDebounce);
+
+            if (minDist < 80 && closestIdx > 0) {
+              let isBehind = true;
+              if (heading !== null && closestIdx < routeLatLngs.length - 1) {
+                const nextPt = routeLatLngs[closestIdx + 1];
+                const dLng2 = (nextPt.lng - lat) * Math.PI / 180;
+                const lat1b = lat * Math.PI / 180;
+                const lat2b = nextPt.lat * Math.PI / 180;
+                const yb = Math.sin(dLng2) * Math.cos(lat2b);
+                const xb = Math.cos(lat1b) * Math.sin(lat2b)
+                         - Math.sin(lat1b) * Math.cos(lat2b) * Math.cos(dLng2);
+                const bearingToNext = (Math.atan2(yb, xb) * 180 / Math.PI + 360) % 360;
+                const angleDiff = Math.abs(((heading - bearingToNext) + 180) % 360 - 180);
+                isBehind = angleDiff < 100;
+              }
+              if (isBehind) {
+                const CLR = ['#2dd4bf','#f59e0b','#6b7280'];
+                routeLayers[selIdx].setLatLngs(routeLatLngs.slice(closestIdx));
+                routeLayers[selIdx].setStyle({ color: CLR[selIdx]||'#2dd4bf', weight:6, opacity:0.9 });
+                routeLayers[selIdx].bringToFront();
+              }
+            }
+          }
+        }
+      }
+
+      if (routeLayers[selIdx] && map.hasLayer(routeLayers[selIdx])) {
+        const routeLL2 = routeLayers[selIdx].getLatLngs();
+        let nearestDist = Infinity;
+        for (let i = 0; i < routeLL2.length; i++) {
+          const d = getDistance(lat, lng, routeLL2[i].lat, routeLL2[i].lng);
+          if (d < nearestDist) nearestDist = d;
+          if (nearestDist < OFF_ROUTE_METRES) break;
+        }
+
+        if (nearestDist > OFF_ROUTE_METRES) {
+          _offRouteCount++;
+          if (_offRouteCount === 2) {
+            showToast('⚠️ You seem to be off route');
+            if (navigator.vibrate) navigator.vibrate(200);
+          }
+          if (_offRouteCount >= OFF_ROUTE_TICKS && !_isRecalculating) {
+            _isRecalculating = true;
+            _offRouteCount = 0;
+            showToast('Recalculating safest route…');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            fromCoords = [lat, lng];
+            findRoutes().then(() => {
+              _isRecalculating = false;
+              if (routeLayers && routeLayers.length) {
+                routeLayers.forEach((layer, i) => {
+                  if (!layer) return;
+                  if (i !== selIdx) { if (map.hasLayer(layer)) map.removeLayer(layer); }
+                  else { layer.setStyle({ opacity:0.9, weight:6 }); }
+                });
+              }
+              populateNdRoutes();
+              updateNavStats(true);
+              showToast('Route updated ✅');
+            }).catch(() => { _isRecalculating = false; });
+          }
+        } else {
+          _offRouteCount = 0;
+        }
+      }
+
+      updateNavStats();
+
+      if (_navFollowMode && map) {
+        map.setView([lat, lng], map.getZoom(), { animate: true, duration: 0.3 });
+      }
+
+      if (crimeZones.length) checkLiveRisk(lat, lng);
+
+      if (_navMode && crimeZones.length && traversedCoords.length % 5 === 0) {
+        const h2 = SH[_lastAutoSlot] || new Date().getHours();
+        const cache2 = buildZoneCache(h2);
+        const currentRisk = scorePoint(lat, lng, cache2);
+
+        if (currentRisk >= 6.0) {
+          const onRecommendedRoute = routeLayers[selIdx] &&
+            map.hasLayer(routeLayers[selIdx]) &&
+            (() => {
+              const ll = routeLayers[selIdx].getLatLngs();
+              for (const pt of ll) {
+                if (getDistance(lat, lng, pt.lat, pt.lng) < 100) return true;
+              }
+              return false;
+            })();
+
+          if (!onRecommendedRoute) {
+            const riskInfo = riskLabel(currentRisk);
+            showToast('⚠️ ' + riskInfo.label + ' area — not on your safe route!');
+            if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150]);
+            throttledSpeak('Warning. You are in a ' + riskInfo.label.toLowerCase() + ' area. Return to your safe route.');
+          }
+        }
+      }
+
+      if (toCoords && !_journeyEnded) {
+        const distToDest = getDistance(lat, lng, toCoords[0], toCoords[1]);
+        if (distToDest < ARRIVAL_RADIUS) {
+          _journeyEnded = true;
+          showToast('You have arrived! 🎉');
+          stopLiveTracking();
+          setTimeout(triggerArrivalReview, 1200);
+        }
+      }
+    },
+    err => {
+      console.warn('Live tracking error:', err.message);
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
+  );
+}
+
+function stopLiveTracking() {
+  if (liveWatchId !== null) {
+    navigator.geolocation.clearWatch(liveWatchId);
+    liveWatchId = null;
+  }
+  trackingOn = false;
+  _navMode = false;
+  _liveSpeedMps = null;
+  _navFollowMode = false;
+  stopCompass();
+  _lastHeading = null;
+  if (locMarker && fromCoords) {
+    placeLocationMarker(fromCoords[0], fromCoords[1], 20);
+  }
+}
+
+// ════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════
+// ════════════════════════════════════════
+// TEST HELPER — Remove before launch
+// ════════════════════════════════════════
+function simulateArrival() {
+  _journeyEnded = true;
+  _reviewTriggered = false; // allow re-triggering on repeated test clicks
+  showToast('You have arrived! 🎉 (Simulated)');
+  setTimeout(triggerArrivalReview, 800);
+}
+window.addEventListener('DOMContentLoaded', () => {
+  applyStoredTheme();
+  startClock();
+  initApp();
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => { if (map) map.invalidateSize(); })
+      .observe(document.getElementById('mw'));
+  }
+});
+</script>
+
+<div id="nav-hud">
+  <div id="nav-sheet" class="collapsed">
+
+    <div id="nav-handle" onclick="toggleNavDrawer()"></div>
+
+    <div id="nav-peek" onclick="toggleNavDrawer()">
+      <div id="nav-bar">
+
+        <button class="nav-btn-sos" onclick="event.stopPropagation();openSOS()">SOS</button>
+
+        <div id="nav-stats-center">
+          <div id="nstat-dest-emoji"></div>
+          <div id="nstat-time-val">—</div>
+          <div id="nstat-time-lbl">Time left</div>
+          <div id="nav-stats-sub">
+            <span id="nstat-dist">—</span>
+            <span class="nav-sub-dot">·</span>
+            <span>Arrive <span id="nstat-eta">—</span></span>
+          </div>
+        </div>
+
+        <button class="nav-btn-exit" onclick="event.stopPropagation();exitNavigation()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span style="font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Exit</span>
+        </button>
+
+      </div>
+    </div>
+
+    <div id="nav-peek-div" style="display:none"></div>
+
+    <div id="nav-scroll">
+
+      <div>
+        <div class="nd-sl">Travel Mode</div>
+        <div class="nd-mode-sw">
+          <button class="nd-mode-btn active" data-mode="foot-walking" onclick="ndSetMode(this)">🚶 Walking</button>
+          <button class="nd-mode-btn" data-mode="cycling-regular" onclick="ndSetMode(this)">🚲 Cycling</button>
+          <button class="nd-mode-btn" data-mode="driving-car" onclick="ndSetMode(this)">🚗 Driving</button>
+        </div>
+      </div>
+
+      <div class="nd-div"></div>
+
+      <div>
+        <div class="nd-sl">Route Options</div>
+        <div class="nd-route-list" id="nd-routes"></div>
+      </div>
+
+      <div class="nd-div"></div>
+
+      <div>
+        <div class="nd-sl">Unsafe-Zone Voice Alerts</div>
+        <button class="btn bo" id="zone-mute-btn" onclick="toggleZoneAlertMute()" style="margin-bottom:0.5rem">
+          🔊 Mute Unsafe-Zone Voice Alerts
+        </button>
+      </div>
+
+      <div class="nd-div"></div>
+
+      <!-- TEST BUTTONS — Remove before launch -->
+      <div>
+        <div class="nd-sl">Testing</div>
+        <button class="btn bo" onclick="simulateArrival()" style="margin-bottom:0.5rem;border-color:var(--teal);color:var(--teal)">
+          🧪 Simulate Arrival + Review (Test)
+        </button>
+        <button class="btn bo" onclick="simulateUnsafeZone()" style="margin-bottom:0.5rem;border-color:var(--amber);color:var(--amber)">
+          🧪 Simulate Entering Unsafe Zone (Test)
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Mumbai travel & safety chatbot -->
+<script src="js/mumbai-transit-data.js"></script>
+<!-- Optional: uncomment after deploying supabase/functions/sp-chat to let an LLM answer free-form questions
+<script>window.SP_CHAT_ENDPOINT = SUPABASE_URL + '/functions/v1/sp-chat';</script> -->
+<script src="js/mumbai-chatbot.js"></script>
+</body>
+</html>
